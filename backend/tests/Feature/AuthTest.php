@@ -94,4 +94,27 @@ class AuthTest extends TestCase
         $this->assertSame('donor', $payload['user']['role']);
         $this->assertSame('login@example.com', $payload['user']['email']);
     }
+
+    public function test_pending_hospital_can_login_and_receive_approval_status(): void
+    {
+        app(AuthController::class)->registerHospital(Request::create('/api/v1/register/hospital', 'POST', [
+            'hospital_name' => 'Pending Hospital',
+            'license_number' => 'MED-5555',
+            'email' => 'pending-hospital@example.com',
+            'phone' => '09555555555',
+            'address' => 'Medical Road',
+            'password' => 'password123',
+        ]));
+
+        $login = app(AuthController::class)->login(Request::create('/api/v1/login', 'POST', [
+            'email' => 'pending-hospital@example.com',
+            'password' => 'password123',
+        ]));
+
+        $payload = $login->getData(true);
+
+        $this->assertSame(200, $login->getStatusCode());
+        $this->assertSame('hospital', $payload['user']['role']);
+        $this->assertSame('pending', $payload['user']['hospital']['approval_status']);
+    }
 }

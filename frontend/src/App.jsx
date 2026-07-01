@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiBaseUrl } from './config/api'
+import { clearAuthSession, getUserHomeRoute, setAuthSession } from './services/authStorage'
 import './App.css'
 
 function App() {
-  const [currentUser, setCurrentUser] = useState(null)
+  const navigate = useNavigate()
   const [activeModal, setActiveModal] = useState('')
   const [selectedRole, setSelectedRole] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -22,6 +24,8 @@ function App() {
     phone: '',
     blood_group: '',
     township: '',
+    latitude:'',
+    longtitude:'',
     password: '',
     acceptedTerms: false,
   })
@@ -34,6 +38,14 @@ function App() {
     request_note: '',
     password: '',
     acceptedTerms: false,
+  })
+  const [hospitalForm, setHospitalForm] = useState({
+    hospital_name: '',
+    license_number: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: '',
   })
 
   const stats = [
@@ -68,15 +80,6 @@ function App() {
 
   const heroImage =
     'https://lh3.googleusercontent.com/aida-public/AB6AXuDffjEBF-BKXYNHwhfCeaZw6PbswUmn8YIbTvt5HROIAbu7ujn5x8fHFo-s6sQDjXRF7v-g6cuj6cj_6WgI1riEl6ITRX3O8R7k2CcR63v1QNWKZQNKuPMzn8ZDIKQYIk0B4FQy94y46TaunTKAhrv_-QZtth13GV9ENykVXS7F6QC_3vH-2NYFeJ_pEJ8W6xamCK0k-A43a67WBvEOaev8nLCY_KE9z0n7u8Ti9ezDTDx71UOTSol5bykOVN2oYJn1UFshb-3JrFI'
-
-  useEffect(() => {
-    const savedUser = localStorage.getItem('lifeblood_user')
-    const savedToken = localStorage.getItem('lifeblood_token')
-
-    if (savedUser && savedToken) {
-      setCurrentUser(JSON.parse(savedUser))
-    }
-  }, [])
 
   function openJoinModal() {
     setActiveModal('join')
@@ -155,10 +158,10 @@ function App() {
   }
 
   function finishAuth(data) {
-    localStorage.setItem('lifeblood_token', data.token)
-    localStorage.setItem('lifeblood_user', JSON.stringify(data.user))
-    setCurrentUser(data.user)
+    clearAuthSession()
+    setAuthSession(data)
     closeModal()
+    navigate(getUserHomeRoute(data.user), { replace: true })
   }
 
   async function handleDonorRegister(event) {
@@ -216,97 +219,20 @@ function App() {
     }
   }
 
-  async function handleLogout() {
-    const token = localStorage.getItem('lifeblood_token')
+  async function handleHospitalRegister(event) {
+    event.preventDefault()
 
-    if (token) {
-      try {
-        await fetch(`${apiBaseUrl}/logout`, {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        })
-      } catch {
-        // Ignore logout network errors and clear local session anyway.
-      }
+    try {
+      setAuthLoading(true)
+      setAuthError('')
+      clearAuthSession()
+      const data = await submitAuthRequest('/register/hospital', hospitalForm)
+      finishAuth(data)
+    } catch (error) {
+      setAuthError(error.message)
+    } finally {
+      setAuthLoading(false)
     }
-
-    localStorage.removeItem('lifeblood_token')
-    localStorage.removeItem('lifeblood_user')
-    setCurrentUser(null)
-  }
-
-  function renderDashboard() {
-    if (!currentUser) {
-      return null
-    }
-
-    const isDonor = currentUser.role === 'donor'
-    const isPatient = currentUser.role === 'patient'
-    const donorProfile = currentUser.donor
-    const patientProfile = currentUser.patient
-
-    return (
-      <main className="dashboard-shell">
-        <header className="dashboard-header">
-          <div>
-            <p className="dashboard-kicker">Welcome back</p>
-            <h1>{isDonor ? 'Donor Dashboard' : isPatient ? 'Patient Dashboard' : 'Dashboard'}</h1>
-            <p className="dashboard-subtitle">
-              Signed in as {currentUser.name} ({currentUser.role})
-            </p>
-          </div>
-
-          <button className="pill-button pill-button--solid nav-button" type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </header>
-
-        <section className="dashboard-grid">
-          <article className="dashboard-card">
-            <h2>Profile</h2>
-            <p>Name: {currentUser.name}</p>
-            <p>Email: {currentUser.email}</p>
-            <p>Phone: {currentUser.phone || 'Not set'}</p>
-            <p>Status: {currentUser.status}</p>
-          </article>
-
-          {isDonor ? (
-            <article className="dashboard-card">
-              <h2>Donation Info</h2>
-              <p>Blood Group: {donorProfile?.blood_type || 'Not set'}</p>
-              <p>Location: {donorProfile?.general_location || 'Not set'}</p>
-              <p>Availability: {donorProfile?.availability_status || 'available'}</p>
-              <p>Total Donations: {donorProfile?.total_donations ?? 0}</p>
-            </article>
-          ) : null}
-
-          {isPatient ? (
-            <article className="dashboard-card">
-              <h2>Patient Request</h2>
-              <p>Needed Blood Group: {patientProfile?.needed_blood_type || 'Not set'}</p>
-              <p>Township: {patientProfile?.township || 'Not set'}</p>
-              <p>Request Note: {patientProfile?.request_note || 'No note yet'}</p>
-            </article>
-          ) : null}
-
-          <article className="dashboard-card dashboard-card--wide">
-            <h2>Next Backend Step</h2>
-            <p>
-              Donor and patient authentication is working. Next we can build real
-              dashboard data, emergency blood requests, donor search, and role-based
-              protected pages.
-            </p>
-          </article>
-        </section>
-      </main>
-    )
-  }
-
-  if (currentUser) {
-    return <div className="page-shell">{renderDashboard()}</div>
   }
 
   return (
@@ -811,13 +737,18 @@ function App() {
                 </button>
               </div>
 
-              <form className="auth-form auth-form--hospital">
+              <form className="auth-form auth-form--hospital" onSubmit={handleHospitalRegister}>
                 <div className="auth-form__grid">
                   <label className="field">
                     <span>Hospital Name</span>
                     <div className="field__input">
                       <span className="field__icon">⌘</span>
-                      <input type="text" placeholder="Hospital Name" />
+                      <input
+                        type="text"
+                        placeholder="Hospital Name"
+                        value={hospitalForm.hospital_name}
+                        onChange={(event) => updateForm(setHospitalForm, 'hospital_name', event.target.value)}
+                      />
                     </div>
                   </label>
 
@@ -825,7 +756,12 @@ function App() {
                     <span>License Number</span>
                     <div className="field__input">
                       <span className="field__icon">☷</span>
-                      <input type="text" placeholder="MED-9920-X" />
+                      <input
+                        type="text"
+                        placeholder="MED-9920-X"
+                        value={hospitalForm.license_number}
+                        onChange={(event) => updateForm(setHospitalForm, 'license_number', event.target.value)}
+                      />
                     </div>
                   </label>
 
@@ -833,7 +769,12 @@ function App() {
                     <span>Email</span>
                     <div className="field__input">
                       <span className="field__icon">✉</span>
-                      <input type="email" placeholder="example@hospital.org" />
+                      <input
+                        type="email"
+                        placeholder="example@hospital.org"
+                        value={hospitalForm.email}
+                        onChange={(event) => updateForm(setHospitalForm, 'email', event.target.value)}
+                      />
                     </div>
                   </label>
 
@@ -841,7 +782,12 @@ function App() {
                     <span>Phone Number</span>
                     <div className="field__input">
                       <span className="field__icon">☏</span>
-                      <input type="tel" placeholder="09*********" />
+                      <input
+                        type="tel"
+                        placeholder="09*********"
+                        value={hospitalForm.phone}
+                        onChange={(event) => updateForm(setHospitalForm, 'phone', event.target.value)}
+                      />
                     </div>
                   </label>
 
@@ -853,6 +799,8 @@ function App() {
                         className="field__textarea"
                         rows="2"
                         placeholder="Full medical facility address..."
+                        value={hospitalForm.address}
+                        onChange={(event) => updateForm(setHospitalForm, 'address', event.target.value)}
                       />
                     </div>
                   </label>
@@ -864,6 +812,8 @@ function App() {
                       <input
                         type={showHospitalPassword ? 'text' : 'password'}
                         placeholder="Your Password"
+                        value={hospitalForm.password}
+                        onChange={(event) => updateForm(setHospitalForm, 'password', event.target.value)}
                       />
                       <button
                         className="field__toggle"
@@ -876,9 +826,11 @@ function App() {
                   </label>
                 </div>
 
+                {authError ? <p className="auth-error">{authError}</p> : null}
+
                 <div className="auth-form__actions auth-form__actions--tight">
-                  <button className="submit-button" type="submit">
-                    Register Hospital
+                  <button className="submit-button" type="submit" disabled={authLoading}>
+                    {authLoading ? 'Registering...' : 'Register Hospital'}
                   </button>
                   <p className="auth-form__switch">
                     By registering, you agree to the{' '}

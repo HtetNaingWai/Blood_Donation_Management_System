@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Numeric;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -26,6 +27,7 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8'],
             'blood_group' => ['required', Rule::in($this->bloodGroups())],
             'township' => ['required', 'string', 'max:255'],
+            
         ]);
 
         $user = DB::transaction(function () use ($validated): User {
@@ -119,12 +121,20 @@ class AuthController extends Controller
                 'status' => 'pending',
             ]);
 
-            $user->hospital()->create([
+            $hospitalProfile = [
                 'hospital_name' => $validated['hospital_name'],
                 'license_number' => $validated['license_number'],
                 'address' => $validated['address'],
                 'approval_status' => 'pending',
-            ]);
+                'approved_by_user_id' => null,
+                'approved_at' => null,
+            ];
+
+            if (Schema::hasColumn('hospitals', 'rejection_reason')) {
+                $hospitalProfile['rejection_reason'] = null;
+            }
+
+            $user->hospital()->create($hospitalProfile);
 
             return $user;
         });
@@ -144,12 +154,6 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($validated['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
-
-        if ($user->role === User::ROLE_HOSPITAL && $user->hospital?->approval_status !== 'approved') {
-            throw ValidationException::withMessages([
-                'email' => ['Hospital registration is pending admin approval.'],
             ]);
         }
 

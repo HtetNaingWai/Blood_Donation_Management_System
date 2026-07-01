@@ -15,6 +15,7 @@ class Hospital extends Model
         'latitude',
         'longitude',
         'approval_status',
+        'rejection_reason',
         'approved_by_user_id',
         'approved_at',
     ];
