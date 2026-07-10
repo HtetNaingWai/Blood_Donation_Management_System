@@ -21,6 +21,8 @@ class AuthTest extends TestCase
             'password_confirmation' => 'password123',
             'blood_group' => 'O+',
             'township' => 'Yangon',
+            'latitude' => 16.8409,
+            'longitude' => 96.1735,
         ]));
 
         $payload = $response->getData(true);
@@ -28,6 +30,8 @@ class AuthTest extends TestCase
         $this->assertSame(201, $response->getStatusCode());
         $this->assertSame('donor', $payload['user']['role']);
         $this->assertSame('O+', $payload['user']['donor']['blood_type']);
+        $this->assertSame('16.8409000', $payload['user']['donor']['latitude']);
+        $this->assertSame('96.1735000', $payload['user']['donor']['longitude']);
     }
 
     public function test_patient_can_register(): void

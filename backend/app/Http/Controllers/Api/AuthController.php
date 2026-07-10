@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Numeric;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -27,7 +26,8 @@ class AuthController extends Controller
             'password' => ['required', 'string', 'min:8'],
             'blood_group' => ['required', Rule::in($this->bloodGroups())],
             'township' => ['required', 'string', 'max:255'],
-            
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
         ]);
 
         $user = DB::transaction(function () use ($validated): User {
@@ -43,6 +43,8 @@ class AuthController extends Controller
             $user->donor()->create([
                 'blood_type' => $validated['blood_group'],
                 'general_location' => $validated['township'],
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
                 'is_eligible' => true,
                 'availability_status' => 'available',
                 'total_donations' => 0,

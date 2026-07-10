@@ -1,14 +1,16 @@
 .page-shell {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0 0 2rem;
 }
 
 .landing-page {
   background: #fcfbfa;
-  border: 0;
   border-radius: 0;
   box-shadow: none;
   overflow: hidden;
-  min-height: 100vh;
+  
 }
 
 .landing-page--modal-open {
@@ -683,6 +685,74 @@
   padding-bottom: 0.95rem;
 }
 
+.location-picker {
+  border: 1px solid #e1bfb9;
+  border-radius: 18px;
+  background: #fff9f8;
+  padding: 1rem;
+}
+
+.location-picker__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.location-picker__button {
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 1rem;
+  background: linear-gradient(135deg, #d82121 0%, #ab1818 100%);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.location-picker__hint {
+  margin: 0;
+  color: #6d5651;
+  line-height: 1.6;
+}
+
+.location-picker__map {
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid #ead6d1;
+}
+
+.location-picker__map-frame {
+  width: 100%;
+  height: 280px;
+}
+
+.location-picker__status {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.location-picker__status p {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: #fff;
+  color: #59413d;
+  line-height: 1.6;
+}
+
+.location-picker__error {
+  margin: 0.9rem 0 0;
+  color: #b42318;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
 .terms-row {
   display: flex;
   align-items: flex-start;
@@ -843,9 +913,42 @@
 }
 
 .dashboard-shell {
-  min-height: 100vh;
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
   background: #f8f9fa;
-  padding: 2rem 1.5rem 3rem;
+}
+
+.dashboard-sidebar {
+  height: 100vh;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: sticky;
+  top: 0;
+  /* The sidebar stays fixed while the content area scrolls independently. */
+}
+
+.dashboard-main {
+  flex: 1;
+  height: 100vh;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Only the main dashboard area scrolls, which prevents body-level double scrollbars. */
+}
+
+.dashboard-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  border-bottom: 1px solid #e1bfb9;
+}
+
+.dashboard-content {
+  padding: 24px;
 }
 
 .dashboard-header {
@@ -1170,6 +1273,10 @@
     grid-template-columns: 1fr;
   }
 
+  .location-picker__status {
+    grid-template-columns: 1fr;
+  }
+
   .auth-modal__footer {
     padding-top: 1rem;
     padding-bottom: 1rem;
@@ -1185,7 +1292,7 @@
   }
 
   .dashboard-shell {
-    padding: 1.5rem 1rem 2rem;
+    padding: 0;
   }
 
   .dashboard-header {

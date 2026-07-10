@@ -35,6 +35,67 @@ function RoleDashboardPage({ role }) {
     navigate('/', { replace: true })
   }
 
+  if (role === 'patient') {
+    return (
+      <div className="dashboard-shell patient-shell">
+        <aside className="dashboard-sidebar patient-sidebar">
+          <div>
+            <div className="patient-brand">
+              <span>BloodLink</span>
+              <small>Patient Portal</small>
+            </div>
+
+            <nav className="patient-nav" aria-label="Patient">
+              <div className="patient-nav__item">
+                <span aria-hidden="true">🩺</span>
+                Dashboard
+              </div>
+            </nav>
+          </div>
+
+          <button type="button" className="patient-logout" onClick={handleLogout}>
+            <span aria-hidden="true">⇨</span>
+            Logout
+          </button>
+        </aside>
+
+        <main className="dashboard-main patient-main">
+          <header className="dashboard-topbar patient-topbar">
+            <div>
+              <h1>{titles[role] || 'Dashboard'}</h1>
+              <p>Signed in as {user?.name || 'User'}</p>
+            </div>
+          </header>
+
+          <section className="dashboard-content patient-content">
+            <section className="status-card status-card--wide">
+              <span className="status-card__badge status-card__badge--approved">Dashboard</span>
+              <h1>{titles[role] || 'Dashboard'}</h1>
+              <p>Signed in as {user?.name || 'User'}. This protected area is ready for the next phase of your project.</p>
+
+              <div className="status-card__details">
+                {summaries[role]?.map((item) => (
+                  <div key={item} className="status-card__detail">
+                    {item}
+                  </div>
+                ))}
+              </div>
+
+              <div className="status-card__actions">
+                <Link className="auth-page__secondary" to="/">
+                  Back to Home
+                </Link>
+                <button className="auth-page__submit" type="button" onClick={handleLogout}>
+                  Logout
+                </button>
+              </div>
+            </section>
+          </section>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="status-page">
       <section className="status-card status-card--wide">

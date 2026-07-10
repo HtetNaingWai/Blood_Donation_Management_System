@@ -12,15 +12,23 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
-  margin: 0;
   min-width: 320px;
   min-height: 100vh;
   background: #f8f9fa;
+  overflow: hidden;
 }
 
 html {
@@ -44,12 +52,12 @@ h4 {
 
 #root {
   width: 100%;
-  margin: 0;
-  padding: 0 0 3rem;
+  min-height: 100%;
+  padding: 0;
 }
 
 @media (max-width: 720px) {
   #root {
-    padding: 0 0 2rem;
+    padding: 0;
   }
 }

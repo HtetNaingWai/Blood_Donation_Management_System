@@ -55,8 +55,8 @@ function AdminLayout() {
   }
 
   return (
-    <div className="admin-shell">
-      <aside className="admin-sidebar">
+    <div className="dashboard-shell admin-shell">
+      <aside className="dashboard-sidebar admin-sidebar">
         <div className="admin-brand">
           <span className="admin-brand__mark">+</span>
           <span>BloodLink</span>
@@ -91,8 +91,8 @@ function AdminLayout() {
         </button>
       </aside>
 
-      <div className="admin-main">
-        <header className="admin-topbar">
+      <div className="dashboard-main admin-main">
+        <header className="dashboard-topbar admin-topbar">
           <div>
             <h1>{title}</h1>
             <p>LifeBlood administration console</p>
@@ -109,7 +109,7 @@ function AdminLayout() {
           </div>
         </header>
 
-        <main className="admin-content">
+        <main className="dashboard-content admin-content">
           <Outlet />
         </main>
       </div>

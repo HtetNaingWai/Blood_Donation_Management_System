@@ -21,10 +21,12 @@ class DonorController extends Controller
         $donor = $user->donor;
         $history = $this->donationHistory($user, $donor);
         $requests = $this->nearbyRequests($donor);
+        $acceptedRequests = $this->acceptedRequests($user, $donor);
         $notifications = $this->notifications($user);
 
         return response()->json([
             'user' => $user,
+            'donor' => $donor,
             'summary' => [
                 'blood_group' => $donor?->blood_type,
                 'availability_status' => $donor?->availability_status ?? 'available',
@@ -40,8 +42,179 @@ class DonorController extends Controller
             ],
             'donation_trends' => $this->donationTrends($history, $donor),
             'nearby_requests' => $requests,
+            'accepted_requests' => $acceptedRequests,
+            'completed_requests' => array_values(array_filter(
+                $acceptedRequests,
+                fn (array $request): bool => strtolower((string) ($request['raw_status'] ?? '')) === 'completed',
+            )),
+            'donations' => $history,
             'donation_history' => $history,
             'notifications' => $notifications,
+        ]);
+    }
+
+    public function requests(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('donor');
+        $donor = $user->donor;
+
+        return response()->json([
+            'available_requests' => $this->nearbyRequests($donor, 20),
+            'accepted_requests' => $this->acceptedRequests($user, $donor),
+        ]);
+    }
+
+    public function donations(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('donor');
+        $donor = $user->donor;
+
+        return response()->json([
+            'user' => $user,
+            'donor' => $donor,
+            'donations' => $this->donationHistory($user, $donor, 50),
+        ]);
+    }
+
+    public function hospitals(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'user' => $user,
+            'hospitals' => $this->approvedHospitals(),
+        ]);
+    }
+
+    public function acceptRequest(Request $request, int $requestId): JsonResponse
+    {
+        $user = $request->user()->load('donor');
+        $donor = $user->donor;
+
+        if (! $donor) {
+            return response()->json([
+                'message' => 'Donor profile not found.',
+            ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if (! $this->hasTable('emergency_requests')) {
+            return response()->json([
+                'message' => 'Emergency request table is not available in this schema.',
+            ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $requestRow = DB::table('emergency_requests')->where('id', $requestId)->first();
+
+        if (! $requestRow) {
+            return response()->json([
+                'message' => 'Blood request not found.',
+            ], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        if ($this->hasTable('request_responses')) {
+            $existing = DB::table('request_responses')
+                ->where('emergency_request_id', $requestId)
+                ->where('donor_id', $donor->id)
+                ->exists();
+
+            if ($existing) {
+                return response()->json([
+                    'message' => 'You already accepted this blood request.',
+                ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+            }
+
+            $payload = [
+                'emergency_request_id' => $requestId,
+                'donor_id' => $donor->id,
+                'status' => 'accepted',
+            ];
+
+            if ($this->hasColumn('request_responses', 'hospital_id') && $this->hasColumn('emergency_requests', 'hospital_id')) {
+                $payload['hospital_id'] = $requestRow->hospital_id ?? null;
+            }
+
+            if ($this->hasColumn('request_responses', 'eta_minutes')) {
+                $payload['eta_minutes'] = $this->estimateEtaMinutes(
+                    $donor->latitude,
+                    $donor->longitude,
+                    $requestRow->latitude ?? null,
+                    $requestRow->longitude ?? null,
+                );
+            }
+
+            if ($this->hasColumn('request_responses', 'created_at')) {
+                $payload['created_at'] = now();
+            }
+
+            if ($this->hasColumn('request_responses', 'updated_at')) {
+                $payload['updated_at'] = now();
+            }
+
+            DB::table('request_responses')->insert($payload);
+        }
+
+        if ($this->hasColumn('emergency_requests', 'status')) {
+            $status = strtolower((string) ($requestRow->status ?? 'open'));
+
+            if (in_array($status, ['open', 'active'], true)) {
+                DB::table('emergency_requests')
+                    ->where('id', $requestId)
+                    ->update([
+                        'status' => 'pending',
+                        ...($this->hasColumn('emergency_requests', 'updated_at') ? ['updated_at' => now()] : []),
+                    ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Blood request accepted successfully.',
+            'accepted_requests' => $this->acceptedRequests($user->fresh()->load('donor'), $donor->fresh()),
+        ]);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('donor');
+
+        if (! $user->donor) {
+            return response()->json([
+                'message' => 'Donor profile not found.',
+            ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['required', 'string', 'max:30', Rule::unique('users', 'phone')->ignore($user->id)],
+            'blood_type' => ['required', Rule::in($this->bloodGroups())],
+            'general_location' => ['required', 'string', 'max:255'],
+            'contact_address' => ['nullable', 'string', 'max:1000'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'email_notifications' => ['nullable', 'boolean'],
+            'location_sharing' => ['nullable', 'boolean'],
+        ]);
+
+        $user->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+        ]);
+
+        // Keep donor-specific settings and saved map coordinates together on the donor profile.
+        $user->donor->update([
+            'blood_type' => $validated['blood_type'],
+            'general_location' => $validated['general_location'],
+            'contact_address' => $validated['contact_address'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'email_notifications' => $validated['email_notifications'] ?? $user->donor->email_notifications,
+            'location_sharing' => $validated['location_sharing'] ?? $user->donor->location_sharing,
+        ]);
+
+        return response()->json([
+            'message' => 'Donor profile updated successfully.',
+            'user' => $user->fresh()->load('donor'),
         ]);
     }
 
@@ -69,7 +242,7 @@ class DonorController extends Controller
         ]);
     }
 
-    private function nearbyRequests(?Donor $donor): array
+    private function nearbyRequests(?Donor $donor, int $limit = 6): array
     {
         if (! $this->hasTable('emergency_requests')) {
             return [];
@@ -91,12 +264,22 @@ class DonorController extends Controller
             $query->whereIn('status', ['active', 'open', 'pending']);
         }
 
+        if ($donor?->id && $this->hasTable('request_responses') && $this->hasColumn('request_responses', 'donor_id')) {
+            $acceptedIds = DB::table('request_responses')
+                ->where('donor_id', $donor->id)
+                ->pluck('emergency_request_id');
+
+            if ($acceptedIds->isNotEmpty()) {
+                $query->whereNotIn('emergency_requests.id', $acceptedIds->all());
+            }
+        }
+
         $createdColumn = $this->firstExistingColumn('emergency_requests', ['required_by', 'needed_by', 'created_at', 'id']) ?? 'id';
 
         return $query
             ->select($this->requestSelectColumns())
             ->orderByDesc($createdColumn)
-            ->limit(6)
+            ->limit($limit)
             ->get()
             ->map(function (object $row): array {
                 $record = (array) $row;
@@ -115,13 +298,64 @@ class DonorController extends Controller
                     'needed' => $needed,
                     'required_by' => $this->formatRequiredBy($record['required_by'] ?? $record['needed_by'] ?? null),
                     'status' => $record['status'] ?? 'active',
+                    'status_tone' => $this->requestStatusTone((string) ($record['status'] ?? 'active')),
                 ];
             })
             ->values()
             ->all();
     }
 
-    private function donationHistory(User $user, ?Donor $donor): array
+    private function acceptedRequests(User $user, ?Donor $donor): array
+    {
+        if (! $this->hasTable('request_responses') || ! $donor?->id) {
+            return [];
+        }
+
+        $query = DB::table('request_responses')
+            ->where('request_responses.donor_id', $donor->id);
+
+        if ($this->hasTable('emergency_requests')) {
+            $query->leftJoin('emergency_requests', 'request_responses.emergency_request_id', '=', 'emergency_requests.id');
+        }
+
+        if ($this->hasTable('hospitals') && $this->hasColumn('emergency_requests', 'hospital_id')) {
+            $query->leftJoin('hospitals', 'emergency_requests.hospital_id', '=', 'hospitals.id');
+        }
+
+        $sortColumn = $this->qualifiedFirstExistingColumn('request_responses', ['created_at', 'id']) ?? 'request_responses.id';
+
+        return $query
+            ->select($this->acceptedRequestSelectColumns())
+            ->orderByDesc($sortColumn)
+            ->limit(12)
+            ->get()
+            ->map(function (object $row): array {
+                $record = (array) $row;
+                $status = strtolower((string) ($record['response_status'] ?? $record['status'] ?? 'accepted'));
+                $bloodType = $record['blood_group']
+                    ?? $record['needed_blood_type']
+                    ?? $record['blood_type']
+                    ?? 'Unknown';
+
+                return [
+                    'id' => $record['id'] ?? null,
+                    'request_id' => $record['emergency_request_id'] ?? null,
+                    'request_code' => '#REQ-'.str_pad((string) ($record['emergency_request_id'] ?? 0), 4, '0', STR_PAD_LEFT),
+                    'hospital' => $record['hospital_name'] ?? 'Hospital',
+                    'blood_type' => $bloodType,
+                    'status' => $this->donorResponseStatusLabel($status),
+                    'raw_status' => $status,
+                    'status_tone' => $this->requestStatusTone($status),
+                    'eta_minutes' => $record['eta_minutes'] ?? null,
+                    'accepted_at' => $this->formatRelativeTime($record['created_at'] ?? null),
+                    'completed_at' => $this->formatDate($record['completed_at'] ?? null),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function donationHistory(User $user, ?Donor $donor, int $limit = 8): array
     {
         if (! $this->hasTable('donations')) {
             return [];
@@ -146,17 +380,21 @@ class DonorController extends Controller
         return $query
             ->select($this->donationSelectColumns())
             ->orderByDesc($sortColumn)
-            ->limit(8)
+            ->limit($limit)
             ->get()
             ->map(function (object $row) use ($donor): array {
                 $record = (array) $row;
+                $status = strtolower((string) ($record['status'] ?? 'completed'));
 
                 return [
                     'id' => $record['id'] ?? null,
                     'date' => $this->formatDate($record['donated_at'] ?? $record['donation_date'] ?? $record['created_at'] ?? null),
                     'hospital' => $record['hospital_name'] ?? 'Hospital',
                     'blood_group' => $record['blood_group'] ?? $record['blood_type'] ?? $donor?->blood_type ?? 'Unknown',
-                    'status' => ucfirst(strtolower((string) ($record['status'] ?? 'completed'))),
+                    'units' => (int) ($record['units'] ?? 1),
+                    'status' => $this->donorDonationStatusLabel($status),
+                    'status_tone' => $this->requestStatusTone($status),
+                    'reward_points' => 10,
                 ];
             })
             ->values()
@@ -243,6 +481,54 @@ class DonorController extends Controller
             ->all();
     }
 
+    private function approvedHospitals(): array
+    {
+        if (! $this->hasTable('hospitals')) {
+            return [];
+        }
+
+        $query = DB::table('hospitals');
+
+        if ($this->hasTable('users') && $this->hasColumn('hospitals', 'user_id')) {
+            $query->leftJoin('users', 'hospitals.user_id', '=', 'users.id');
+        }
+
+        if ($this->hasColumn('hospitals', 'approval_status')) {
+            $query->where('hospitals.approval_status', 'approved');
+        }
+
+        if ($this->hasColumn('hospitals', 'latitude')) {
+            $query->whereNotNull('hospitals.latitude');
+        }
+
+        if ($this->hasColumn('hospitals', 'longitude')) {
+            $query->whereNotNull('hospitals.longitude');
+        }
+
+        return $query
+            ->select($this->approvedHospitalSelectColumns())
+            ->orderBy('hospitals.hospital_name')
+            ->get()
+            ->map(function (object $row): array {
+                $record = (array) $row;
+
+                return [
+                    'id' => $record['id'] ?? null,
+                    'hospital_name' => $record['hospital_name'] ?? 'Approved Hospital',
+                    'license_number' => $record['license_number'] ?? null,
+                    'address' => $record['address'] ?? 'Address unavailable',
+                    'latitude' => isset($record['latitude']) ? (float) $record['latitude'] : null,
+                    'longitude' => isset($record['longitude']) ? (float) $record['longitude'] : null,
+                    'approval_status' => $record['approval_status'] ?? 'approved',
+                    'email' => $record['email'] ?? null,
+                    'phone' => $record['phone'] ?? null,
+                ];
+            })
+            ->filter(fn (array $hospital): bool => $hospital['latitude'] !== null && $hospital['longitude'] !== null)
+            ->values()
+            ->all();
+    }
+
     private function requestSelectColumns(): array
     {
         return array_values(array_filter([
@@ -261,6 +547,23 @@ class DonorController extends Controller
         ]));
     }
 
+    private function acceptedRequestSelectColumns(): array
+    {
+        return array_values(array_filter([
+            'request_responses.id',
+            $this->selectIfExists('request_responses', 'emergency_request_id'),
+            $this->selectIfExists('request_responses', 'status', 'response_status'),
+            $this->selectIfExists('request_responses', 'eta_minutes'),
+            $this->selectIfExists('request_responses', 'created_at'),
+            $this->selectIfExists('request_responses', 'completed_at'),
+            $this->selectIfExists('emergency_requests', 'status'),
+            $this->selectIfExists('emergency_requests', 'blood_group'),
+            $this->selectIfExists('emergency_requests', 'needed_blood_type'),
+            $this->selectIfExists('emergency_requests', 'blood_type'),
+            $this->selectIfExists('hospitals', 'hospital_name', 'hospital_name'),
+        ]));
+    }
+
     private function donationSelectColumns(): array
     {
         return array_values(array_filter([
@@ -270,8 +573,24 @@ class DonorController extends Controller
             $this->selectIfExists('donations', 'created_at'),
             $this->selectIfExists('donations', 'blood_group'),
             $this->selectIfExists('donations', 'blood_type'),
+            $this->selectIfExists('donations', 'units'),
             $this->selectIfExists('donations', 'status'),
             $this->selectIfExists('hospitals', 'hospital_name', 'hospital_name'),
+        ]));
+    }
+
+    private function approvedHospitalSelectColumns(): array
+    {
+        return array_values(array_filter([
+            'hospitals.id',
+            $this->selectIfExists('hospitals', 'hospital_name'),
+            $this->selectIfExists('hospitals', 'license_number'),
+            $this->selectIfExists('hospitals', 'address'),
+            $this->selectIfExists('hospitals', 'latitude'),
+            $this->selectIfExists('hospitals', 'longitude'),
+            $this->selectIfExists('hospitals', 'approval_status'),
+            $this->selectIfExists('users', 'email'),
+            $this->selectIfExists('users', 'phone'),
         ]));
     }
 
@@ -288,6 +607,11 @@ class DonorController extends Controller
             'AB+' => ['AB+', 'AB-', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-'],
             default => [$bloodType],
         };
+    }
+
+    private function bloodGroups(): array
+    {
+        return ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
     }
 
     private function notificationTone(array $record): string
@@ -376,6 +700,55 @@ class DonorController extends Controller
         };
     }
 
+    private function donorResponseStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'completed', 'fulfilled', 'closed' => 'Done',
+            default => ucfirst($status),
+        };
+    }
+
+    private function donorDonationStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'completed', 'fulfilled', 'closed' => 'Completed',
+            default => ucfirst($status),
+        };
+    }
+
+    private function requestStatusTone(string $status): string
+    {
+        return match (strtolower($status)) {
+            'completed', 'fulfilled', 'closed' => 'completed',
+            'accepted', 'pending', 'partially fulfilled', 'partial', 'partially_fulfilled' => 'pending',
+            default => 'open',
+        };
+    }
+
+    private function estimateEtaMinutes(mixed $fromLat, mixed $fromLng, mixed $toLat, mixed $toLng): ?int
+    {
+        if (! is_numeric($fromLat) || ! is_numeric($fromLng) || ! is_numeric($toLat) || ! is_numeric($toLng)) {
+            return null;
+        }
+
+        $distanceKm = $this->distanceKm((float) $fromLat, (float) $fromLng, (float) $toLat, (float) $toLng);
+
+        return max(4, (int) round($distanceKm * 5));
+    }
+
+    private function distanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371;
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lonDelta = deg2rad($lon2 - $lon1);
+
+        $angle = sin($latDelta / 2) * sin($latDelta / 2)
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2))
+            * sin($lonDelta / 2) * sin($lonDelta / 2);
+
+        return $earthRadius * (2 * atan2(sqrt($angle), sqrt(1 - $angle)));
+    }
+
     private function daysUntilEligible(mixed $nextEligibleDate): int
     {
         if (! $nextEligibleDate) {
@@ -420,6 +793,13 @@ class DonorController extends Controller
     private function firstExistingColumn(string $table, array $columns): ?string
     {
         return Collection::make($columns)->first(fn (string $column): bool => $this->hasColumn($table, $column));
+    }
+
+    private function qualifiedFirstExistingColumn(string $table, array $columns): ?string
+    {
+        $column = $this->firstExistingColumn($table, $columns);
+
+        return $column ? sprintf('%s.%s', $table, $column) : null;
     }
 
     private function hasTable(string $table): bool

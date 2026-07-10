@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import LocationPicker from '../../components/LocationPicker'
 import donorService, { emptyDonorDashboard } from '../../services/donorService'
 import { logout } from '../../services/authService'
 import { getStoredUser } from '../../services/authStorage'
+import SearchHospital from './SearchHospital'
 
 const sidebarItems = [
-  { label: 'Dashboard', icon: '⌘' },
-  { label: 'Profile', icon: '◌' },
-  { label: 'Donations', icon: '◔' },
-  { label: 'Requests', icon: '✦' },
-  { label: 'Map', icon: '⌖' },
+  { label: 'Dashboard', icon: '📊' },
+  { label: 'Donations', icon: '💉' },
+  { label: 'Blood Requests', icon: '🩸' },
+  { label: 'Search Hospital', icon: '🏨' },
   { label: 'Notifications', icon: '🔔' },
-  { label: 'Settings', icon: '⚙' },
+  { label: 'Profile', icon: '👤' },
+  
 ]
+const defaultMapCenter = [16.8409, 96.1735]
 
 function barHeight(value, maxValue) {
   if (!maxValue) {
@@ -36,6 +39,27 @@ function DonorDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [availabilitySaving, setAvailabilitySaving] = useState(false)
+  const [hospitalsLoading, setHospitalsLoading] = useState(false)
+  const [locationLoading, setLocationLoading] = useState(false)
+  const [requestActionLoadingId, setRequestActionLoadingId] = useState(null)
+  const [donationsLoading, setDonationsLoading] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileMessage, setProfileMessage] = useState('')
+  const [locationMessage, setLocationMessage] = useState('')
+  const [mapCenter, setMapCenter] = useState(defaultMapCenter)
+  const [currentLocation, setCurrentLocation] = useState(null)
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    blood_type: '',
+    general_location: '',
+    contact_address: '',
+    latitude: '',
+    longitude: '',
+    email_notifications: true,
+    location_sharing: true,
+  })
 
   useEffect(() => {
     let isMounted = true
@@ -60,7 +84,11 @@ function DonorDashboard() {
           },
           donation_trends: data?.donation_trends || [],
           nearby_requests: data?.nearby_requests || [],
-          donation_history: data?.donation_history || [],
+          hospitals: data?.hospitals || [],
+          accepted_requests: data?.accepted_requests || [],
+          completed_requests: data?.completed_requests || [],
+          donations: data?.donations || data?.donation_history || [],
+          donation_history: data?.donations || data?.donation_history || [],
           notifications: data?.notifications || [],
         })
         setNotifications(data?.notifications || [])
@@ -117,12 +145,83 @@ function DonorDashboard() {
     )
   }, [dashboard.donation_history, searchTerm])
 
+  const filteredDonations = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return dashboard.donations
+    }
+
+    const query = searchTerm.toLowerCase()
+
+    return dashboard.donations.filter((item) =>
+      [item.hospital, item.blood_group, item.status, item.date, String(item.units), String(item.reward_points)]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query)),
+    )
+  }, [dashboard.donations, searchTerm])
+
+  const filteredHospitals = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return dashboard.hospitals || []
+    }
+
+    const query = searchTerm.toLowerCase()
+
+    return (dashboard.hospitals || []).filter((hospital) =>
+      [hospital.hospital_name, hospital.address, hospital.license_number, hospital.phone, hospital.email]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query)),
+    )
+  }, [dashboard.hospitals, searchTerm])
+
   const statCards = [
     { label: 'Total Donations', value: dashboard.summary.total_donations },
     { label: 'Lives Saved', value: dashboard.summary.lives_saved },
-    { label: 'Pending Requests', value: dashboard.summary.pending_requests },
+    { label: 'Open Requests', value: dashboard.summary.pending_requests },
     { label: 'Last Donation', value: dashboard.summary.last_donation_date || 'No record yet' },
   ]
+
+  useEffect(() => {
+    if (!currentUser) {
+      return
+    }
+
+    setProfileForm({
+      name: currentUser.name || '',
+      email: currentUser.email || '',
+      phone: currentUser.phone || '',
+      blood_type: currentUser.donor?.blood_type || '',
+      general_location: currentUser.donor?.general_location || '',
+      contact_address: currentUser.donor?.contact_address || '',
+      latitude: currentUser.donor?.latitude ?? '',
+      longitude: currentUser.donor?.longitude ?? '',
+      email_notifications: currentUser.donor?.email_notifications ?? true,
+      location_sharing: currentUser.donor?.location_sharing ?? true,
+    })
+  }, [currentUser])
+
+  useEffect(() => {
+    if (!dashboard.hospitals?.length) {
+      return
+    }
+
+    if (currentLocation) {
+      return
+    }
+
+    const firstHospital = dashboard.hospitals[0]
+
+    if (firstHospital?.latitude && firstHospital?.longitude) {
+      setMapCenter([firstHospital.latitude, firstHospital.longitude])
+    }
+  }, [currentLocation, dashboard.hospitals])
+
+  useEffect(() => {
+    if (activeSection !== 'Search Hospital' || dashboard.hospitals?.length) {
+      return
+    }
+
+    refreshHospitals()
+  }, [activeSection])
 
   async function handleLogout() {
     await logout()
@@ -149,6 +248,165 @@ function DonorDashboard() {
       setError('Unable to update your donation availability right now.')
     } finally {
       setAvailabilitySaving(false)
+    }
+  }
+
+  function updateProfileField(field, value) {
+    setProfileForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  function handleProfileLocationChange(location) {
+    setProfileForm((current) => ({
+      ...current,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }))
+  }
+
+  async function handleProfileSave(event) {
+    event.preventDefault()
+    setProfileSaving(true)
+    setProfileMessage('')
+    setError('')
+
+    try {
+      const data = await donorService.updateProfile({
+        name: profileForm.name,
+        email: profileForm.email,
+        phone: profileForm.phone,
+        blood_type: profileForm.blood_type,
+        general_location: profileForm.general_location,
+        contact_address: profileForm.contact_address || null,
+        latitude: profileForm.latitude || null,
+        longitude: profileForm.longitude || null,
+        email_notifications: Boolean(profileForm.email_notifications),
+        location_sharing: Boolean(profileForm.location_sharing),
+      })
+
+      setDashboard((previous) => ({
+        ...previous,
+        user: data.user,
+        summary: {
+          ...previous.summary,
+          blood_group: data.user?.donor?.blood_type || previous.summary.blood_group,
+        },
+      }))
+      setProfileMessage('Your donor profile has been updated.')
+    } catch (profileError) {
+      setError(profileError?.message || 'Unable to save your donor profile right now.')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  async function refreshRequestData() {
+    const data = await donorService.getRequests()
+
+    setDashboard((previous) => ({
+      ...previous,
+      nearby_requests: data?.available_requests || [],
+      accepted_requests: data?.accepted_requests || [],
+      summary: {
+        ...previous.summary,
+        pending_requests: (data?.available_requests || []).length,
+      },
+    }))
+  }
+
+  async function refreshDonations() {
+    setDonationsLoading(true)
+
+    try {
+      const data = await donorService.getDonations()
+
+      setDashboard((previous) => ({
+        ...previous,
+        user: data?.user || previous.user,
+        donor: data?.donor || previous.donor,
+        donations: data?.donations || [],
+        donation_history: data?.donations || [],
+      }))
+    } catch {
+      setError('Unable to load your donation records right now.')
+    } finally {
+      setDonationsLoading(false)
+    }
+  }
+
+  async function refreshHospitals() {
+    setHospitalsLoading(true)
+    setLocationMessage('')
+
+    try {
+      const data = await donorService.getHospitals()
+
+      setDashboard((previous) => ({
+        ...previous,
+        hospitals: data?.hospitals || [],
+      }))
+    } catch {
+      setError('Unable to load approved hospitals right now.')
+    } finally {
+      setHospitalsLoading(false)
+    }
+  }
+
+  function handleUseMyLocation() {
+    if (!navigator.geolocation) {
+      setLocationMessage('Your browser does not support geolocation.')
+      return
+    }
+
+    setLocationLoading(true)
+    setLocationMessage('')
+
+    // The donor location stays in local component state so hospitals are never overwritten on the map.
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }
+
+        setCurrentLocation(nextLocation)
+        setMapCenter([nextLocation.latitude, nextLocation.longitude])
+        setLocationMessage('Your current location is now shown on the map.')
+        setLocationLoading(false)
+      },
+      (locationError) => {
+        const fallbackMessage = locationError?.code === 1
+          ? 'Location permission was denied.'
+          : 'Unable to get your current location right now.'
+
+        setLocationMessage(fallbackMessage)
+        setLocationLoading(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+      },
+    )
+  }
+
+  async function handleAcceptRequest(requestId) {
+    setRequestActionLoadingId(requestId)
+    setError('')
+
+    try {
+      await donorService.acceptRequest(requestId)
+      await refreshRequestData()
+    } catch (requestError) {
+      const apiMessage =
+        requestError?.response?.data?.errors
+          ? Object.values(requestError.response.data.errors).flat()[0]
+          : requestError?.response?.data?.message
+
+      setError(apiMessage || 'Unable to accept this blood request right now.')
+    } finally {
+      setRequestActionLoadingId(null)
     }
   }
 
@@ -224,7 +482,7 @@ function DonorDashboard() {
             <section className="donor-panel">
               <div className="donor-panel__header">
                 <h2>Nearby Blood Requests</h2>
-                <button type="button" onClick={() => setActiveSection('Requests')}>View All</button>
+                <button type="button" onClick={() => setActiveSection('Blood Requests')}>View All</button>
               </div>
 
               <div className="donor-request-grid">
@@ -252,8 +510,13 @@ function DonorDashboard() {
                         </div>
                       </div>
 
-                      <button type="button" className="donor-request-card__action">
-                        Accept Request
+                      <button
+                        type="button"
+                        className="donor-request-card__action"
+                        onClick={() => handleAcceptRequest(request.id)}
+                        disabled={requestActionLoadingId === request.id}
+                      >
+                        {requestActionLoadingId === request.id ? 'Accepting...' : 'Accept Request'}
                       </button>
                     </article>
                   ))
@@ -368,9 +631,314 @@ function DonorDashboard() {
     )
   }
 
+  function renderProfile() {
+    return (
+      <section className="donor-profile">
+        <form className="donor-profile__form donor-panel" onSubmit={handleProfileSave}>
+          <div className="donor-panel__header">
+            <h2>Donor Profile</h2>
+            <button type="submit" className="donor-profile__save" disabled={profileSaving}>
+              {profileSaving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </div>
+
+          <div className="donor-profile__grid">
+            <label className="donor-profile__field">
+              <span>Full Name</span>
+              <input
+                type="text"
+                value={profileForm.name}
+                onChange={(event) => updateProfileField('name', event.target.value)}
+              />
+            </label>
+
+            <label className="donor-profile__field">
+              <span>Email Address</span>
+              <input
+                type="email"
+                value={profileForm.email}
+                onChange={(event) => updateProfileField('email', event.target.value)}
+              />
+            </label>
+
+            <label className="donor-profile__field">
+              <span>Phone Number</span>
+              <input
+                type="tel"
+                value={profileForm.phone}
+                onChange={(event) => updateProfileField('phone', event.target.value)}
+              />
+            </label>
+
+            <label className="donor-profile__field">
+              <span>Blood Group</span>
+              <select
+                value={profileForm.blood_type}
+                onChange={(event) => updateProfileField('blood_type', event.target.value)}
+              >
+                <option value="" disabled>Select Group</option>
+                <option>A+</option>
+                <option>A-</option>
+                <option>B+</option>
+                <option>B-</option>
+                <option>O+</option>
+                <option>O-</option>
+                <option>AB+</option>
+                <option>AB-</option>
+              </select>
+            </label>
+
+            <label className="donor-profile__field">
+              <span>Township</span>
+              <input
+                type="text"
+                value={profileForm.general_location}
+                onChange={(event) => updateProfileField('general_location', event.target.value)}
+              />
+            </label>
+
+            <label className="donor-profile__field donor-profile__field--full">
+              <span>Address</span>
+              <textarea
+                rows="4"
+                value={profileForm.contact_address}
+                onChange={(event) => updateProfileField('contact_address', event.target.value)}
+                placeholder="Add your donor contact address"
+              />
+            </label>
+
+            <div className="donor-profile__field donor-profile__field--full">
+              <span>Saved Map Location</span>
+              <LocationPicker
+                value={{
+                  latitude: profileForm.latitude || null,
+                  longitude: profileForm.longitude || null,
+                }}
+                onLocationChange={handleProfileLocationChange}
+              />
+            </div>
+          </div>
+
+          <div className="donor-profile__preferences">
+            <label className="donor-profile__checkbox">
+              <input
+                type="checkbox"
+                checked={profileForm.email_notifications}
+                onChange={(event) => updateProfileField('email_notifications', event.target.checked)}
+              />
+              <span>Email notifications for donation updates</span>
+            </label>
+
+            <label className="donor-profile__checkbox">
+              <input
+                type="checkbox"
+                checked={profileForm.location_sharing}
+                onChange={(event) => updateProfileField('location_sharing', event.target.checked)}
+              />
+              <span>Allow location sharing for nearby request matching</span>
+            </label>
+          </div>
+
+          {profileMessage ? <p className="donor-profile__message">{profileMessage}</p> : null}
+        </form>
+
+        <aside className="donor-profile__summary donor-grid__side">
+          <section className="donor-panel">
+            <div className="donor-panel__header">
+              <h2>Profile Snapshot</h2>
+            </div>
+            <div className="donor-profile__stats">
+              <div>
+                <span>Blood Group</span>
+                <strong>{profileForm.blood_type || 'Not set'}</strong>
+              </div>
+              <div>
+                <span>Township</span>
+                <strong>{profileForm.general_location || 'Not set'}</strong>
+              </div>
+              <div>
+                <span>Reward Points</span>
+                <strong>{dashboard.summary.reward_points || 0}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="donor-panel">
+            <div className="donor-panel__header">
+              <h2>Donation Status</h2>
+            </div>
+            <div className="donor-eligibility">
+              <div className="donor-eligibility__row">
+                <span>Availability</span>
+                <strong>{formatAvailability(dashboard.summary.availability_status)}</strong>
+              </div>
+              <div className="donor-eligibility__bar">
+                <span style={{ width: `${dashboard.summary.eligibility_progress}%` }} />
+              </div>
+              <p>
+                Keep your profile updated so hospitals can match you more accurately during urgent requests.
+              </p>
+            </div>
+          </section>
+        </aside>
+      </section>
+    )
+  }
+
+  function renderBloodRequests() {
+    return (
+      <section className="donor-requests-page">
+        <section className="donor-panel">
+          <div className="donor-panel__header">
+            <h2>Available Hospital Blood Requests</h2>
+            <button type="button" onClick={refreshRequestData}>Refresh</button>
+          </div>
+
+          <div className="donor-request-grid">
+            {filteredRequests.length ? (
+              filteredRequests.map((request) => (
+                <article className="donor-request-card" key={request.id || `${request.hospital}-${request.needed}`}>
+                  <div className="donor-request-card__header">
+                    <div>
+                      <strong>{request.hospital}</strong>
+                      <span>⌖ {request.distance || 'Nearby'}</span>
+                    </div>
+                    <span className={`donor-request-card__badge donor-request-card__badge--${request.urgency_tone || 'medium'}`}>
+                      {request.urgency || 'Open'}
+                    </span>
+                  </div>
+
+                  <div className="donor-request-card__meta">
+                    <div>
+                      <small>Needed</small>
+                      <strong>{request.needed || 'Unknown'}</strong>
+                    </div>
+                    <div>
+                      <small>Required By</small>
+                      <strong>{request.required_by || 'Soon'}</strong>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="donor-request-card__action"
+                    onClick={() => handleAcceptRequest(request.id)}
+                    disabled={requestActionLoadingId === request.id}
+                  >
+                    {requestActionLoadingId === request.id ? 'Accepting...' : 'Accept Request'}
+                  </button>
+                </article>
+              ))
+            ) : (
+              <div className="donor-empty-state">No blood requests are available for your blood group right now.</div>
+            )}
+          </div>
+        </section>
+
+        <section className="donor-panel donor-panel--table">
+          <div className="donor-panel__header">
+            <h2>Request Responses</h2>
+            <span>{dashboard.accepted_requests?.length || 0} total</span>
+          </div>
+
+          <div className="donor-table-wrap">
+            <table className="donor-table">
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Hospital</th>
+                  <th>Blood Group</th>
+                  <th>Status</th>
+                  <th>ETA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.accepted_requests?.length ? (
+                  dashboard.accepted_requests.map((item) => (
+                    <tr key={item.id || item.request_code}>
+                      <td>{item.request_code}</td>
+                      <td>{item.hospital}</td>
+                      <td>
+                        <span className="donor-table__group">{item.blood_type || 'Unknown'}</span>
+                      </td>
+                      <td>
+                        <span className={`donor-table__status donor-table__status--${item.status_tone || 'pending'}`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td>{item.eta_minutes ? `${item.eta_minutes} mins` : 'Pending route'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="donor-table__empty">You have not responded to any hospital blood requests yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    )
+  }
+
+  function renderDonations() {
+    return (
+      <section className="donor-requests-page">
+        <section className="donor-panel donor-panel--table">
+          <div className="donor-panel__header">
+            <h2>Completed Donations</h2>
+            <button type="button" onClick={refreshDonations}>
+              {donationsLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+
+          <div className="donor-table-wrap">
+            <table className="donor-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Hospital</th>
+                  <th>Blood Type</th>
+                  <th>Units</th>
+                  <th>Status</th>
+                  <th>Reward Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDonations.length ? (
+                  filteredDonations.map((item) => (
+                    <tr key={item.id || `${item.date}-${item.hospital}`}>
+                      <td>{item.date || 'No date'}</td>
+                      <td>{item.hospital || 'Hospital'}</td>
+                      <td>
+                        <span className="donor-table__group">{item.blood_group || 'Unknown'}</span>
+                      </td>
+                      <td>{item.units || 1}</td>
+                      <td>
+                        <span className={`donor-table__status donor-table__status--${item.status_tone || 'completed'}`}>
+                          {item.status || 'Completed'}
+                        </span>
+                      </td>
+                      <td>{item.reward_points || 0}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="donor-table__empty">No completed donation records are available yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    )
+  }
+
   return (
-    <div className="donor-shell">
-      <aside className="donor-sidebar">
+    <div className="dashboard-shell donor-shell">
+      <aside className="dashboard-sidebar donor-sidebar">
         <div>
           <div className="donor-brand">
             <span>BloodLink</span>
@@ -393,15 +961,15 @@ function DonorDashboard() {
         </div>
 
         <button type="button" className="donor-logout" onClick={handleLogout}>
-          <span aria-hidden="true">⇢</span>
+          <span aria-hidden="true">⇨</span>
           Logout
         </button>
       </aside>
 
-      <div className="donor-main">
-        <header className="donor-topbar">
+      <div className="dashboard-main donor-main">
+        <header className="dashboard-topbar donor-topbar">
           <label className="donor-search">
-            <span aria-hidden="true">⌕</span>
+            <span aria-hidden="true">🔎</span>
             <input
               type="text"
               placeholder="Search hospitals or requests..."
@@ -412,27 +980,31 @@ function DonorDashboard() {
 
           <div className="donor-topbar__actions">
             <span className="donor-topbar__icon" aria-hidden="true">🔔</span>
-            <span className="donor-topbar__icon" aria-hidden="true">?</span>
             <div className="donor-topbar__avatar">{donorName.slice(0, 1)}</div>
           </div>
         </header>
 
-        <main className="donor-content">
+        <main className="dashboard-content donor-content">
           {error ? <p className="donor-error">{error}</p> : null}
 
           {activeSection === 'Dashboard' && renderDashboard()}
-          {activeSection === 'Map' &&
-            renderPlaceholder('Donor Map', 'The map section is intentionally blank for now. Once you give me the map API, I can connect hospitals and blood requests here.')}
-          {activeSection === 'Profile' &&
-            renderPlaceholder('Donor Profile', 'Your donor profile panel will be connected next with editable personal details and donation preferences.')}
-          {activeSection === 'Donations' &&
-            renderPlaceholder('Donation Records', 'A dedicated donation records screen can be added next using the same live donation history data.')}
-          {activeSection === 'Requests' &&
-            renderPlaceholder('Blood Requests', 'A full requests page can be added next for filtering, accepting, and tracking blood requests.')}
+          {activeSection === 'Blood Requests' && renderBloodRequests()}
+          {activeSection === 'Profile' && renderProfile()}
+          {activeSection === 'Donations' && renderDonations()}
+          {activeSection === 'Search Hospital' && (
+            <SearchHospital
+              hospitals={filteredHospitals}
+              hospitalsLoading={hospitalsLoading}
+              locationLoading={locationLoading}
+              locationMessage={locationMessage}
+              mapCenter={mapCenter}
+              currentLocation={currentLocation}
+              onUseMyLocation={handleUseMyLocation}
+              onRefreshHospitals={refreshHospitals}
+            />
+          )}
           {activeSection === 'Notifications' &&
             renderPlaceholder('Notifications Center', 'Your notifications are already live in the dashboard. A full notification center can be added next.')}
-          {activeSection === 'Settings' &&
-            renderPlaceholder('Donor Settings', 'Settings can be connected next for notification preferences, privacy, and location sharing.')}
         </main>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import 'leaflet/dist/leaflet.css'
 import './index.css'
 import './admin.css'
 import App from './App.jsx'
@@ -14,6 +15,7 @@ import PendingHospitals from './pages/admin/PendingHospitals.jsx'
 import PatientManagement from './pages/admin/PatientManagement.jsx'
 import Reports from './pages/admin/Reports.jsx'
 import DonorDashboard from './pages/donor/DonorDashboard.jsx'
+import HospitalDashboard from './pages/hospital/HospitalDashboard.jsx'
 import RoleDashboardPage from './pages/RoleDashboardPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import UnauthorizedPage from './pages/UnauthorizedPage.jsx'
@@ -45,7 +47,7 @@ createRoot(document.getElementById('root')).render(
         </Route>
 
         <Route element={<HospitalApprovedRoute />}>
-          <Route path="/hospital/dashboard" element={<RoleDashboardPage role="hospital" />} />
+          <Route path="/hospital/dashboard" element={<HospitalDashboard />} />
         </Route>
 
         <Route element={<ProtectedRoute />}>

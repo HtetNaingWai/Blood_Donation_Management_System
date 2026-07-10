@@ -19,6 +19,28 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
+
+    Route::prefix('hospital')
+        ->middleware(['auth:sanctum', 'hospital.approved'])
+        ->group(function (): void {
+            Route::get('/dashboard', [HospitalController::class, 'dashboard']);
+            Route::get('/requests', [HospitalController::class, 'requests']);
+            Route::put('/profile', [HospitalController::class, 'updateProfile']);
+            Route::post('/requests', [HospitalController::class, 'storeRequest']);
+            Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
+        });
+
+    Route::prefix('donor')
+        ->middleware(['auth:sanctum', 'donor'])
+        ->group(function (): void {
+            Route::get('/dashboard', [DonorController::class, 'dashboard']);
+            Route::get('/hospitals', [DonorController::class, 'hospitals']);
+            Route::get('/requests', [DonorController::class, 'requests']);
+            Route::get('/donations', [DonorController::class, 'donations']);
+            Route::post('/requests/{requestId}/accept', [DonorController::class, 'acceptRequest']);
+            Route::put('/profile', [DonorController::class, 'updateProfile']);
+            Route::put('/availability', [DonorController::class, 'updateAvailability']);
+        });
 });
 
 Route::prefix('admin')
@@ -43,11 +65,20 @@ Route::prefix('hospital')
     ->middleware(['auth:sanctum', 'hospital.approved'])
     ->group(function (): void {
         Route::get('/dashboard', [HospitalController::class, 'dashboard']);
+        Route::get('/requests', [HospitalController::class, 'requests']);
+        Route::put('/profile', [HospitalController::class, 'updateProfile']);
+        Route::post('/requests', [HospitalController::class, 'storeRequest']);
+        Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
     });
 
 Route::prefix('donor')
     ->middleware(['auth:sanctum', 'donor'])
     ->group(function (): void {
         Route::get('/dashboard', [DonorController::class, 'dashboard']);
+        Route::get('/hospitals', [DonorController::class, 'hospitals']);
+        Route::get('/requests', [DonorController::class, 'requests']);
+        Route::get('/donations', [DonorController::class, 'donations']);
+        Route::post('/requests/{requestId}/accept', [DonorController::class, 'acceptRequest']);
+        Route::put('/profile', [DonorController::class, 'updateProfile']);
         Route::put('/availability', [DonorController::class, 'updateAvailability']);
     });

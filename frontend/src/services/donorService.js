@@ -3,6 +3,7 @@ import { updateStoredUser } from './authStorage'
 
 export const emptyDonorDashboard = {
   user: null,
+  donor: null,
   summary: {
     blood_group: null,
     availability_status: 'available',
@@ -18,6 +19,10 @@ export const emptyDonorDashboard = {
   },
   donation_trends: [],
   nearby_requests: [],
+  hospitals: [],
+  accepted_requests: [],
+  completed_requests: [],
+  donations: [],
   donation_history: [],
   notifications: [],
 }
@@ -46,9 +51,30 @@ async function getWithFallback(path, fallback) {
 }
 
 const donorService = {
-  getDashboard: () => getWithFallback('/donor/dashboard', emptyDonorDashboard),
+  getDashboard: () => getWithFallback('/v1/donor/dashboard', emptyDonorDashboard),
+  getHospitals: () => getWithFallback('/v1/donor/hospitals', { hospitals: [] }),
+  getRequests: () => getWithFallback('/v1/donor/requests', { available_requests: [], accepted_requests: [] }),
+  getDonations: () => getWithFallback('/v1/donor/donations', { donations: [] }),
+  acceptRequest: async (requestId) => {
+    const { data } = await http.post(`/v1/donor/requests/${requestId}/accept`)
+
+    if (data?.user) {
+      updateStoredUser(data.user)
+    }
+
+    return data
+  },
+  updateProfile: async (payload) => {
+    const { data } = await http.put('/v1/donor/profile', payload)
+
+    if (data?.user) {
+      updateStoredUser(data.user)
+    }
+
+    return data
+  },
   updateAvailability: async (availabilityStatus) => {
-    const { data } = await http.put('/donor/availability', {
+    const { data } = await http.put('/v1/donor/availability', {
       availability_status: availabilityStatus,
     })
 

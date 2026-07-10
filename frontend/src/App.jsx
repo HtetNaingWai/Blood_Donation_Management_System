@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import LocationPicker from './components/LocationPicker'
 import { apiBaseUrl } from './config/api'
 import { clearAuthSession, getUserHomeRoute, setAuthSession } from './services/authStorage'
 import './App.css'
@@ -24,8 +25,8 @@ function App() {
     phone: '',
     blood_group: '',
     township: '',
-    latitude:'',
-    longtitude:'',
+    latitude: '',
+    longitude: '',
     password: '',
     acceptedTerms: false,
   })
@@ -137,6 +138,14 @@ function App() {
     }))
   }
 
+  function handleDonorLocationChange(location) {
+    setDonorForm((current) => ({
+      ...current,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }))
+  }
+
   async function submitAuthRequest(endpoint, payload) {
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       method: 'POST',
@@ -175,7 +184,17 @@ function App() {
     try {
       setAuthLoading(true)
       setAuthError('')
-      const data = await submitAuthRequest('/register/donor', donorForm)
+      // Keep the donor registration payload explicit so the API receives clean location data.
+      const data = await submitAuthRequest('/register/donor', {
+        name: donorForm.name,
+        email: donorForm.email,
+        phone: donorForm.phone,
+        blood_group: donorForm.blood_group,
+        township: donorForm.township,
+        latitude: donorForm.latitude || null,
+        longitude: donorForm.longitude || null,
+        password: donorForm.password,
+      })
       finishAuth(data)
     } catch (error) {
       setAuthError(error.message)
@@ -565,6 +584,17 @@ function App() {
                     <input type="text" placeholder="Central District" value={donorForm.township} onChange={(event) => updateForm(setDonorForm, 'township', event.target.value)} />
                   </div>
                 </label>
+
+                <div className="field field--full">
+                  <span>Current Location Selection</span>
+                  <LocationPicker
+                    value={{
+                      latitude: donorForm.latitude || null,
+                      longitude: donorForm.longitude || null,
+                    }}
+                    onLocationChange={handleDonorLocationChange}
+                  />
+                </div>
 
                 <label className="field field--full">
                   <span>Create Password</span>
