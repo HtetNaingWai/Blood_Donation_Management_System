@@ -17,6 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    // Register a donor account and create the linked donor profile used by donor dashboards.
     public function registerDonor(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -102,6 +103,7 @@ class AuthController extends Controller
         return $this->authenticatedResponse($user->load('patient'), 'Patient account created successfully.');
     }
 
+    // Register a hospital account in pending status so admin approval can happen later.
     public function registerHospital(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -144,6 +146,7 @@ class AuthController extends Controller
         return $this->authenticatedResponse($user->load('hospital'), 'Hospital account created successfully.');
     }
 
+    // Validate login credentials and return the Sanctum token plus role-aware profile data.
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([

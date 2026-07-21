@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getStoredToken, getStoredUser } from '../services/authStorage'
 
+// Allow only authenticated hospitals whose approval status is already approved.
 function HospitalApprovedRoute() {
   const location = useLocation()
   const token = getStoredToken()

@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\StatusController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
+    // Public auth and health-check routes used by the React landing page and login forms.
     Route::get('/status', StatusController::class)->name('api.status');
 
     Route::post('/register/donor', [AuthController::class, 'registerDonor']);
@@ -20,16 +21,19 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 
+    // Approved hospital API routes for dashboard data, request creation, profile updates, and donation completion.
     Route::prefix('hospital')
         ->middleware(['auth:sanctum', 'hospital.approved'])
         ->group(function (): void {
             Route::get('/dashboard', [HospitalController::class, 'dashboard']);
+            Route::get('/donors', [HospitalController::class, 'donors']);
             Route::get('/requests', [HospitalController::class, 'requests']);
             Route::put('/profile', [HospitalController::class, 'updateProfile']);
             Route::post('/requests', [HospitalController::class, 'storeRequest']);
             Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
         });
 
+    // Donor-only API routes for dashboard data, hospital map data, request acceptance, and profile updates.
     Route::prefix('donor')
         ->middleware(['auth:sanctum', 'donor'])
         ->group(function (): void {
@@ -43,6 +47,7 @@ Route::prefix('v1')->group(function (): void {
         });
 });
 
+// Admin-only API routes for moderation, reporting, and hospital approval workflows.
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'admin'])
     ->group(function (): void {
@@ -61,16 +66,19 @@ Route::prefix('admin')
         Route::put('/users/{user}/status', [AdminController::class, 'updateUserStatus']);
     });
 
+// Legacy non-v1 hospital routes remain in place for compatibility with older clients.
 Route::prefix('hospital')
     ->middleware(['auth:sanctum', 'hospital.approved'])
     ->group(function (): void {
         Route::get('/dashboard', [HospitalController::class, 'dashboard']);
+        Route::get('/donors', [HospitalController::class, 'donors']);
         Route::get('/requests', [HospitalController::class, 'requests']);
         Route::put('/profile', [HospitalController::class, 'updateProfile']);
         Route::post('/requests', [HospitalController::class, 'storeRequest']);
         Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
     });
 
+// Legacy non-v1 donor routes remain in place for compatibility with older clients.
 Route::prefix('donor')
     ->middleware(['auth:sanctum', 'donor'])
     ->group(function (): void {

@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ApprovedHospitalMiddleware
 {
+    // Allow only approved hospital accounts to reach protected hospital workflows.
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user()?->loadMissing('hospital');

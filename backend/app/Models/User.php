@@ -37,6 +37,7 @@ class User extends Authenticatable
         ];
     }
 
+    // A user can own one donor profile.
     public function donor(): HasOne
     {
         return $this->hasOne(Donor::class);
@@ -47,6 +48,7 @@ class User extends Authenticatable
         return $this->hasOne(Patient::class);
     }
 
+    // A user can own one hospital profile.
     public function hospital(): HasOne
     {
         return $this->hasOne(Hospital::class);

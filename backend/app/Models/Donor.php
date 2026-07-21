@@ -39,6 +39,7 @@ class Donor extends Model
         ];
     }
 
+    // Each donor profile belongs to exactly one user account.
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

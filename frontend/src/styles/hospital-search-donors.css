@@ -1,0 +1,286 @@
+.hospital-search-donors__searchbar,
+.hospital-search-donors__filters,
+.hospital-search-donors__map {
+  display: grid;
+  gap: 1rem;
+}
+
+.hospital-search-donors__searchbar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 1rem;
+  align-items: center;
+}
+
+.hospital-search-donors__query {
+  min-height: 58px;
+  border: 1px solid #ead8d2;
+  border-radius: 18px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0 1rem;
+}
+
+.hospital-search-donors__query input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #22252b;
+  font: inherit;
+}
+
+.hospital-search-donors__query input:focus {
+  outline: none;
+}
+
+.hospital-search-donors__summary {
+  min-height: 58px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #fff4f1 0%, #fee5df 100%);
+  border: 1px solid #efd3cb;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.hospital-search-donors__summary strong {
+  color: #b62f22;
+  font-size: 1.35rem;
+}
+
+.hospital-search-donors__summary span {
+  color: #6b5a54;
+  font-size: 0.9rem;
+}
+
+.hospital-search-donors__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.hospital-search-donors__left,
+.hospital-search-donors__right,
+.hospital-search-donors__results {
+  display: grid;
+  gap: 1rem;
+}
+
+.hospital-search-donors__filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.hospital-search-donors__field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hospital-search-donors__field span {
+  color: #59413d;
+  font-weight: 700;
+}
+
+.hospital-search-donors__field select {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid #e1bfb9;
+  border-radius: 14px;
+  background: #fff;
+  color: #191c1d;
+  font: inherit;
+  padding: 0 1rem;
+}
+
+.hospital-search-donors__field select:focus {
+  outline: none;
+  border-color: #9e2016;
+  box-shadow: 0 0 0 2px #fadbd8;
+}
+
+.hospital-search-donors__card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.hospital-search-donors__card {
+  gap: 1rem;
+}
+
+.hospital-search-donors__request-button,
+.hospital-search-donors__secondary-button {
+  min-height: 46px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hospital-search-donors__request-button {
+  width: 100%;
+  border: 0;
+  background: linear-gradient(135deg, #c0392b 0%, #9d261b 100%);
+  color: #fff;
+}
+
+.hospital-search-donors__secondary-button {
+  min-width: 140px;
+  border: 1px solid #e2c5be;
+  background: #fff;
+  color: #5a4a45;
+}
+
+.hospital-search-donors__card-top {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hospital-search-donors__card-top strong {
+  display: block;
+  color: #191b1d;
+  font-size: 1.1rem;
+}
+
+.hospital-search-donors__card-top p {
+  margin: 0.35rem 0 0;
+  color: #6a5a54;
+}
+
+.hospital-search-donors__meta {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+}
+
+.hospital-search-donors__meta div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.hospital-search-donors__meta dt {
+  color: #7b6c65;
+  font-weight: 600;
+}
+
+.hospital-search-donors__meta dd {
+  margin: 0;
+  color: #27292d;
+  font-weight: 700;
+  text-align: right;
+}
+
+.hospital-search-donors__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 999px;
+  padding: 0 0.8rem;
+  font-size: 0.88rem;
+}
+
+.hospital-search-donors__badge--available {
+  background: #e4f7ea;
+  color: #157f48;
+}
+
+.hospital-search-donors__badge--unavailable {
+  background: #f1eeee;
+  color: #6f6662;
+}
+
+.hospital-search-donors__badge--temporarily_ineligible {
+  background: #fff0d8;
+  color: #a25e07;
+}
+
+.hospital-search-donors__map-frame {
+  min-height: 640px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid #ead8d2;
+}
+
+.hospital-search-donors__leaflet {
+  min-height: 640px;
+}
+
+.donor-map__marker-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.donor-map__marker {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(26, 29, 33, 0.18);
+  font-size: 1rem;
+}
+
+.donor-map__marker--hospital {
+  background: linear-gradient(135deg, #c0392b 0%, #97281d 100%);
+}
+
+.donor-map__marker--donor {
+  background: linear-gradient(135deg, #e7695b 0%, #c0392b 100%);
+}
+
+.hospital-search-donors__empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #e2c4bc;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.hospital-search-donors__request-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.hospital-search-donors__request-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+@media (max-width: 1280px) {
+  .hospital-search-donors__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hospital-search-donors__map-frame,
+  .hospital-search-donors__leaflet {
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 840px) {
+  .hospital-search-donors__searchbar-row,
+  .hospital-search-donors__filter-grid,
+  .hospital-search-donors__card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hospital-search-donors__request-actions {
+    flex-direction: column;
+  }
+
+  .hospital-search-donors__secondary-button {
+    width: 100%;
+  }
+}

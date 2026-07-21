@@ -35,6 +35,7 @@ function MapViewportSync({ center }) {
   return null
 }
 
+// Show approved hospitals on Leaflet with OpenStreetMap tiles and optional donor browser location.
 function SearchHospital({
   hospitals,
   hospitalsLoading,
@@ -72,6 +73,7 @@ function SearchHospital({
         <div className="donor-map">
           <MapContainer center={mapCenter || defaultMapCenter} zoom={12} scrollWheelZoom className="donor-map__frame">
             <MapViewportSync center={mapCenter || defaultMapCenter} />
+            {/* OpenStreetMap provides the public map tiles used for donor hospital discovery. */}
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -84,6 +86,7 @@ function SearchHospital({
                   position={[hospital.latitude, hospital.longitude]}
                   icon={hospitalMarkerIcon}
                 >
+                  {/* Each hospital popup keeps the core donor travel details in one quick tap target. */}
                   <Popup>
                     <strong>{hospital.hospital_name}</strong>
                     <br />

@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import L from 'leaflet'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
-import LocationPicker from '../../components/LocationPicker'
+import LocationPicker from '../../components/map/LocationPicker'
 import hospitalService, { emptyHospitalDashboard } from '../../services/hospitalService'
 import { logout } from '../../services/authService'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../../services/authStorage'
 
 const sidebarItems = [
   { label: 'Dashboard', icon: '📊' },
-  { label: 'Search Donors', icon: '💉' },
+  { label: 'Search Donors', icon: '💉', route: '/hospital/search-donors' },
   { label: 'Blood Requests', icon: '🩸' },
   { label: 'Notifications', icon: '🔔' },
   { label: 'Profile', icon: '👤' },
@@ -26,10 +26,12 @@ const donorMarkerIcon = L.icon({
   iconAnchor: [12, 41],
 })
 
+// Main hospital portal for emergency requests, donor responses, profile updates, and donation confirmation.
 function HospitalDashboard() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const storedUser = getStoredUser()
-  const [activeSection, setActiveSection] = useState('Dashboard')
+  const [activeSection, setActiveSection] = useState(searchParams.get('section') || 'Dashboard')
   const [dashboard, setDashboard] = useState(emptyHospitalDashboard)
   const [searchTerm, setSearchTerm] = useState('')
   const [requestFilter, setRequestFilter] = useState('all')
@@ -57,6 +59,10 @@ function HospitalDashboard() {
   })
 
   useEffect(() => {
+    setActiveSection(searchParams.get('section') || 'Dashboard')
+  }, [searchParams])
+
+  useEffect(() => {
     let isMounted = true
 
     async function loadDashboard() {
@@ -64,6 +70,7 @@ function HospitalDashboard() {
       setError('')
 
       try {
+        // Load hospital statistics, active requests, donor responses, and map data in one dashboard request.
         const data = await hospitalService.getDashboard()
 
         if (!isMounted) {
@@ -204,6 +211,22 @@ function HospitalDashboard() {
     navigate('/', { replace: true })
   }
 
+  function handleSectionChange(item) {
+    if (item.route) {
+      navigate(item.route)
+      return
+    }
+
+    setActiveSection(item.label)
+
+    if (item.label === 'Dashboard') {
+      setSearchParams({})
+      return
+    }
+
+    setSearchParams({ section: item.label })
+  }
+
   function updateRequestForm(field, value) {
     setRequestForm((current) => ({
       ...current,
@@ -234,6 +257,7 @@ function HospitalDashboard() {
     setError('')
 
     try {
+      // Create a new hospital emergency blood request that will appear in donor portals.
       const response = await hospitalService.createRequest({
         blood_type: requestForm.blood_type,
         units_required: Number(requestForm.units_required),
@@ -266,6 +290,7 @@ function HospitalDashboard() {
     setError('')
 
     try {
+      // Confirm that the donor has completed the donation so backend records can be finalized.
       const data = await hospitalService.completeResponse(responseId)
 
       setResponseMessage(data?.message || 'Donation confirmed successfully.')
@@ -289,6 +314,7 @@ function HospitalDashboard() {
     setError('')
 
     try {
+      // Save hospital contact and location details used across dashboards and donor search results.
       const data = await hospitalService.updateProfile({
         hospital_name: profileForm.hospital_name,
         license_number: profileForm.license_number,
@@ -910,7 +936,7 @@ function HospitalDashboard() {
                 key={item.label}
                 type="button"
                 className={`hospital-nav__item${activeSection === item.label ? ' hospital-nav__item--active' : ''}`}
-                onClick={() => setActiveSection(item.label)}
+                onClick={() => handleSectionChange(item)}
               >
                 <span aria-hidden="true">{item.icon}</span>
                 {item.label}

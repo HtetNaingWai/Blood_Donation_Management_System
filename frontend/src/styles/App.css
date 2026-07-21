@@ -1,3 +1,6 @@
+/* ================================
+   Landing Page Layout
+================================ */
 .page-shell {
   height: 100vh;
   overflow-y: auto;
@@ -13,6 +16,9 @@
   
 }
 
+/* ================================
+   Header / Topbar
+================================ */
 .landing-page--modal-open {
   filter: blur(2px) grayscale(0.2);
   pointer-events: none;
@@ -77,6 +83,9 @@
   font-weight: 700;
 }
 
+/* ================================
+   Buttons
+================================ */
 .pill-button {
   display: inline-flex;
   align-items: center;
@@ -116,6 +125,9 @@
   border-color: rgba(255, 255, 255, 0.38);
 }
 
+/* ================================
+   Landing Page Sections
+================================ */
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1.02fr) minmax(350px, 0.98fr);
@@ -376,6 +388,9 @@
   color: #2c2724;
 }
 
+/* ================================
+   Modal Styles
+================================ */
 .join-modal-overlay {
   position: fixed;
   inset: 0;

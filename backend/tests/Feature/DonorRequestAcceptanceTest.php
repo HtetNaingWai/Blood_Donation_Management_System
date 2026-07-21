@@ -60,7 +60,7 @@ class DonorRequestAcceptanceTest extends TestCase
 
         $requestId = DB::table('emergency_requests')->insertGetId([
             'hospital_id' => $hospital->id,
-            'blood_group' => 'O+',
+            'blood_type' => 'O+',
             'units_needed' => 2,
             'status' => 'open',
             'priority' => 'urgent',
@@ -94,7 +94,7 @@ class DonorRequestAcceptanceTest extends TestCase
         Schema::create('emergency_requests', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('hospital_id')->nullable()->constrained('hospitals')->nullOnDelete();
-            $table->string('blood_group', 10)->nullable();
+            $table->string('blood_type', 10)->nullable();
             $table->unsignedInteger('units_needed')->nullable();
             $table->string('status', 40)->default('open');
             $table->string('priority', 40)->nullable();

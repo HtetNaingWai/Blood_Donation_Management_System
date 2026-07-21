@@ -29,6 +29,7 @@ class Hospital extends Model
         ];
     }
 
+    // Each hospital profile belongs to exactly one user account.
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

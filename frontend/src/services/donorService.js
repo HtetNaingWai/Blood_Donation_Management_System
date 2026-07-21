@@ -1,6 +1,7 @@
 import http from './http'
 import { updateStoredUser } from './authStorage'
 
+// Default donor dashboard shape keeps the UI stable when an API section is unavailable.
 export const emptyDonorDashboard = {
   user: null,
   donor: null,
@@ -50,11 +51,13 @@ async function getWithFallback(path, fallback) {
   }
 }
 
+// Donor API calls are grouped here so donor pages stay focused on presentation and state updates.
 const donorService = {
   getDashboard: () => getWithFallback('/v1/donor/dashboard', emptyDonorDashboard),
   getHospitals: () => getWithFallback('/v1/donor/hospitals', { hospitals: [] }),
   getRequests: () => getWithFallback('/v1/donor/requests', { available_requests: [], accepted_requests: [] }),
   getDonations: () => getWithFallback('/v1/donor/donations', { donations: [] }),
+  // Accept a hospital blood request from the donor dashboard.
   acceptRequest: async (requestId) => {
     const { data } = await http.post(`/v1/donor/requests/${requestId}/accept`)
 
@@ -64,6 +67,7 @@ const donorService = {
 
     return data
   },
+  // Save donor profile changes, including location and notification preferences.
   updateProfile: async (payload) => {
     const { data } = await http.put('/v1/donor/profile', payload)
 

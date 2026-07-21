@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../services/authStorage'
 
+// Allow only the requested role, such as donor or patient, into the wrapped route group.
 function RoleRoute({ allowedRole }) {
   const location = useLocation()
   const token = getStoredToken()

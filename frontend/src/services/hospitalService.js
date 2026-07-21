@@ -1,6 +1,7 @@
 import http from './http'
 import { updateStoredUser } from './authStorage'
 
+// Default hospital dashboard shape keeps the hospital portal rendering even when API sections are empty.
 export const emptyHospitalDashboard = {
   user: null,
   hospital: null,
@@ -20,6 +21,19 @@ export const emptyHospitalDashboard = {
     points: [],
   },
   matches_in_route: [],
+}
+
+export const emptyHospitalDonorSearch = {
+  user: null,
+  hospital: null,
+  filters: {
+    blood_group: null,
+    township: null,
+    availability: null,
+    distance: null,
+    search: null,
+  },
+  donors: [],
 }
 
 function shouldRethrow(error) {
@@ -45,9 +59,28 @@ async function getWithFallback(path, fallback) {
   }
 }
 
+// Hospital API calls are grouped here for request creation, dashboard loading, and donation completion.
 const hospitalService = {
   getDashboard: () => getWithFallback('/v1/hospital/dashboard', emptyHospitalDashboard),
+  getDonors: async (params = {}) => {
+    const { data } = await http.get('/v1/hospital/donors', { params })
+
+    if (data?.user) {
+      updateStoredUser(data.user)
+    }
+
+    return {
+      ...emptyHospitalDonorSearch,
+      ...data,
+      donors: data?.donors || [],
+      filters: {
+        ...emptyHospitalDonorSearch.filters,
+        ...(data?.filters || {}),
+      },
+    }
+  },
   getRequests: () => getWithFallback('/v1/hospital/requests', { active_requests: [], request_responses: [] }),
+  // Save hospital profile details that appear in dashboard cards and donor maps.
   updateProfile: async (payload) => {
     const { data } = await http.put('/v1/hospital/profile', payload)
 
@@ -57,11 +90,13 @@ const hospitalService = {
 
     return data
   },
+  // Create a new hospital blood request that donors can accept.
   createRequest: async (payload) => {
     const { data } = await http.post('/v1/hospital/requests', payload)
 
     return data
   },
+  // Allow only the hospital workflow to mark an accepted donor response as completed.
   completeResponse: async (responseId) => {
     const { data } = await http.put(`/v1/hospital/responses/${responseId}/complete`)
 

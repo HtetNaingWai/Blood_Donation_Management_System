@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../services/authStorage'
 
+// Allow only authenticated admin users into the admin route tree.
 function ProtectedRoute() {
   const location = useLocation()
   const token = getStoredToken()

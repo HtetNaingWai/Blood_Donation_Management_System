@@ -1,4 +1,6 @@
+// The access token is stored locally so React route guards can restore the current session after refresh.
 const TOKEN_KEY = 'lifeblood_token'
+// The signed-in user payload is stored separately so dashboards can route by role without another request.
 const USER_KEY = 'lifeblood_user'
 
 export function getStoredToken() {
@@ -31,6 +33,7 @@ export function setAuthSession(payload) {
   }
 }
 
+// Clearing both token and user details prevents stale role data from surviving logout or failed logins.
 export function clearAuthSession() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)

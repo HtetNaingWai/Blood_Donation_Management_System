@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 
 class HospitalController extends Controller
 {
+    // Build the hospital dashboard response with request statistics, donor responses, and map points.
     public function dashboard(Request $request): JsonResponse
     {
         $user = $request->user()->load('hospital');
@@ -55,6 +56,36 @@ class HospitalController extends Controller
         ]);
     }
 
+    // Return searchable donor records for approved hospitals, including distance and availability metadata.
+    public function donors(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'blood_group' => ['nullable', Rule::in($this->bloodGroups())],
+            'township' => ['nullable', 'string', 'max:150'],
+            'availability' => ['nullable', Rule::in(['available', 'unavailable', 'temporarily_ineligible'])],
+            'distance' => ['nullable', 'numeric', 'min:1', 'max:500'],
+            'search' => ['nullable', 'string', 'max:150'],
+        ]);
+
+        $user = $request->user()->load('hospital');
+        $hospital = $user->hospital;
+        $donors = $this->searchableDonors($hospital, $validated);
+
+        return response()->json([
+            'user' => $user,
+            'hospital' => $hospital,
+            'filters' => [
+                'blood_group' => $validated['blood_group'] ?? null,
+                'township' => $validated['township'] ?? null,
+                'availability' => $validated['availability'] ?? null,
+                'distance' => isset($validated['distance']) ? (float) $validated['distance'] : null,
+                'search' => $validated['search'] ?? null,
+            ],
+            'donors' => $donors,
+        ]);
+    }
+
+    // Create a new emergency blood request for the logged-in approved hospital.
     public function storeRequest(Request $request): JsonResponse
     {
         if (! $this->hasTable('emergency_requests')) {
@@ -67,6 +98,7 @@ class HospitalController extends Controller
             'blood_type' => ['required', Rule::in($this->bloodGroups())],
             'units_required' => ['required', 'integer', 'min:1', 'max:100'],
             'urgency' => ['required', Rule::in(['standard', 'urgent', 'critical'])],
+            'donor_id' => ['nullable', 'integer', Rule::exists('donors', 'id')],
         ]);
 
         $user = $request->user()->load('hospital');
@@ -120,10 +152,12 @@ class HospitalController extends Controller
 
         return response()->json([
             'message' => 'Emergency request broadcast successfully.',
+            'selected_donor_id' => $validated['donor_id'] ?? null,
             'request' => $record ? $this->normalizeActiveRequest($record) : null,
         ], JsonResponse::HTTP_CREATED);
     }
 
+    // Confirm a completed donor response and create the final donation record once.
     public function completeResponse(Request $request, int $responseId): JsonResponse
     {
         $user = $request->user()->load('hospital');
@@ -248,6 +282,7 @@ class HospitalController extends Controller
         ]);
     }
 
+    // Save hospital profile details used in hospital dashboards and donor map markers.
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user()->load('hospital');
@@ -487,6 +522,99 @@ class HospitalController extends Controller
                 ];
             })
             ->sortBy('distance_km')
+            ->values()
+            ->all();
+    }
+
+    private function searchableDonors(?Hospital $hospital, array $filters = []): array
+    {
+        if (! $this->hasTable('donors') || ! $this->hasTable('users')) {
+            return [];
+        }
+
+        $query = DB::table('donors')
+            ->join('users', 'donors.user_id', '=', 'users.id')
+            ->where('users.role', 'donor');
+
+        if ($this->hasColumn('users', 'status')) {
+            $query->where('users.status', 'active');
+        }
+
+        if (! empty($filters['blood_group']) && $this->hasColumn('donors', 'blood_type')) {
+            $query->where('donors.blood_type', $filters['blood_group']);
+        }
+
+        if (! empty($filters['township']) && $this->hasColumn('donors', 'general_location')) {
+            $query->where('donors.general_location', 'like', '%'.$filters['township'].'%');
+        }
+
+        if (! empty($filters['availability']) && $this->hasColumn('donors', 'availability_status')) {
+            $query->where('donors.availability_status', $filters['availability']);
+        }
+
+        if (! empty($filters['search'])) {
+            $search = strtolower((string) $filters['search']);
+
+            $query->where(function ($builder) use ($search): void {
+                $builder->whereRaw('LOWER(users.name) like ?', ['%'.$search.'%']);
+
+                if ($this->hasColumn('donors', 'blood_type')) {
+                    $builder->orWhereRaw('LOWER(donors.blood_type) like ?', ['%'.$search.'%']);
+                }
+
+                if ($this->hasColumn('donors', 'general_location')) {
+                    $builder->orWhereRaw('LOWER(donors.general_location) like ?', ['%'.$search.'%']);
+                }
+            });
+        }
+
+        $center = $this->hospitalCenter($hospital);
+
+        return $query
+            ->select(array_values(array_filter([
+                'donors.id',
+                $this->selectIfExists('donors', 'blood_type'),
+                $this->selectIfExists('donors', 'general_location'),
+                $this->selectIfExists('donors', 'latitude'),
+                $this->selectIfExists('donors', 'longitude'),
+                $this->selectIfExists('donors', 'availability_status'),
+                $this->selectIfExists('donors', 'last_donation_date'),
+                $this->selectIfExists('users', 'name'),
+            ])))
+            ->limit(200)
+            ->get()
+            ->map(function (object $row) use ($center): array {
+                $record = (array) $row;
+                $latitude = isset($record['latitude']) ? (float) $record['latitude'] : null;
+                $longitude = isset($record['longitude']) ? (float) $record['longitude'] : null;
+                $distance = ($latitude !== null && $longitude !== null)
+                    ? $this->distanceKm($center['latitude'], $center['longitude'], $latitude, $longitude)
+                    : null;
+
+                return [
+                    'id' => $record['id'] ?? null,
+                    'name' => $record['name'] ?? 'Donor',
+                    'blood_group' => $record['blood_type'] ?? 'Unknown',
+                    'township' => $record['general_location'] ?? 'Unknown area',
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'availability' => $record['availability_status'] ?? 'available',
+                    'last_donation_date' => $record['last_donation_date'] ?? null,
+                    'distance_km' => $distance !== null ? round($distance, 1) : null,
+                ];
+            })
+            ->filter(function (array $donor) use ($filters): bool {
+                if (! empty($filters['distance']) && $donor['distance_km'] === null) {
+                    return false;
+                }
+
+                if (! empty($filters['distance']) && $donor['distance_km'] !== null) {
+                    return $donor['distance_km'] <= (float) $filters['distance'];
+                }
+
+                return true;
+            })
+            ->sortBy(fn (array $donor): float => $donor['distance_km'] ?? 999999)
             ->values()
             ->all();
     }

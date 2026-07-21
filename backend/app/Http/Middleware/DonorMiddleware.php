@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class DonorMiddleware
 {
+    // Allow only donor accounts to access donor dashboard and request endpoints.
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();

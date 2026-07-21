@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import LocationPicker from '../../components/LocationPicker'
+import LocationPicker from '../../components/map/LocationPicker'
 import donorService, { emptyDonorDashboard } from '../../services/donorService'
 import { logout } from '../../services/authService'
 import { getStoredUser } from '../../services/authStorage'
@@ -29,6 +29,7 @@ function formatAvailability(status) {
   return status === 'available' ? 'Available to Donate' : 'Unavailable'
 }
 
+// Main donor portal for requests, donations, profile settings, and hospital map discovery.
 function DonorDashboard() {
   const navigate = useNavigate()
   const storedUser = getStoredUser()
@@ -69,6 +70,7 @@ function DonorDashboard() {
       setError('')
 
       try {
+        // Load the donor dashboard summary, accepted requests, completed requests, and donation history together.
         const data = await donorService.getDashboard()
 
         if (!isMounted) {
@@ -273,6 +275,7 @@ function DonorDashboard() {
     setError('')
 
     try {
+      // Save donor profile details and preference changes without leaving the dashboard.
       const data = await donorService.updateProfile({
         name: profileForm.name,
         email: profileForm.email,
@@ -341,6 +344,7 @@ function DonorDashboard() {
     setLocationMessage('')
 
     try {
+      // Fetch approved hospitals for the donor map view.
       const data = await donorService.getHospitals()
 
       setDashboard((previous) => ({
@@ -396,6 +400,7 @@ function DonorDashboard() {
     setError('')
 
     try {
+      // Accept the selected blood request from the donor portal.
       await donorService.acceptRequest(requestId)
       await refreshRequestData()
     } catch (requestError) {

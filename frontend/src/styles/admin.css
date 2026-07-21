@@ -1,3 +1,6 @@
+/* ================================
+   Authentication Forms
+================================ */
 .auth-page {
   min-height: 100vh;
   display: grid;
@@ -200,6 +203,9 @@
   font-weight: 700;
 }
 
+/* ================================
+   Admin Dashboard
+================================ */
 .admin-shell {
   min-height: 100vh;
   background: #eef1f4;
@@ -608,6 +614,9 @@
   color: #7b7d83;
 }
 
+/* ================================
+   Donor Dashboard
+================================ */
 .donor-shell {
   min-height: 100vh;
   background: #f4f5f7;

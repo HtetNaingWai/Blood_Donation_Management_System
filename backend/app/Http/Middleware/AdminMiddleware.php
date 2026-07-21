@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminMiddleware
 {
+    // Allow only admin users to access system management endpoints.
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();

@@ -1,5 +1,6 @@
 import http from './http'
 
+// Default admin dashboard data keeps the management screens predictable when optional endpoints fail.
 const emptyDashboard = {
   total_users: 0,
   total_donors: 0,
@@ -45,6 +46,7 @@ async function putWithFallback(path, payload, fallback) {
   }
 }
 
+// Admin API calls stay centralized here for approval, reporting, and moderation screens.
 const adminService = {
   getDashboard: () => getWithFallback('/admin/dashboard', emptyDashboard),
   getUsers: () => getWithFallback('/admin/users', { data: [] }),

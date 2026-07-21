@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { login } from '../services/authService'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../services/authStorage'
 
+// Dedicated sign-in page for users who are redirected from protected dashboard routes.
 function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -27,6 +28,7 @@ function LoginPage() {
     try {
       setLoading(true)
       setError('')
+      // Submit login credentials and then return the user to the route that originally required auth.
       const data = await login(form)
       const requestedPath = location.state?.from?.pathname
       const homeRoute = getUserHomeRoute(data.user)

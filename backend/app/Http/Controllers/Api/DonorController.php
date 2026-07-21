@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 
 class DonorController extends Controller
 {
+    // Build the donor dashboard response with profile, request, completion, and donation sections.
     public function dashboard(Request $request): JsonResponse
     {
         $user = $request->user()->load('donor');
@@ -64,6 +65,7 @@ class DonorController extends Controller
         ]);
     }
 
+    // Return completed donation history for the logged-in donor.
     public function donations(Request $request): JsonResponse
     {
         $user = $request->user()->load('donor');
@@ -76,6 +78,7 @@ class DonorController extends Controller
         ]);
     }
 
+    // Return approved hospitals with coordinates for the donor Search Hospital map.
     public function hospitals(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -86,6 +89,7 @@ class DonorController extends Controller
         ]);
     }
 
+    // Let the donor accept an available blood request without duplicating the response record.
     public function acceptRequest(Request $request, int $requestId): JsonResponse
     {
         $user = $request->user()->load('donor');
@@ -172,6 +176,7 @@ class DonorController extends Controller
         ]);
     }
 
+    // Save donor profile details used by dashboard cards, matching, and hospital map routing.
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user()->load('donor');
