@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Donor extends Model
 {
@@ -43,5 +44,17 @@ class Donor extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    // A donor can have many chat conversations with different hospitals.
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
+
+    // A donor can receive many direct emergency requests from hospitals.
+    public function emergencyRequests(): HasMany
+    {
+        return $this->hasMany(EmergencyRequest::class);
     }
 }

@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\BloodRequestCreated;
 use App\Http\Controllers\Controller;
 use App\Models\Donor;
+use App\Models\EmergencyRequest;
 use App\Models\Hospital;
+use App\Models\User;
+use App\Notifications\BloodRequestNotification;
+use App\Services\BloodRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -15,6 +20,11 @@ use Illuminate\Validation\Rule;
 
 class HospitalController extends Controller
 {
+    public function __construct(
+        private readonly BloodRequestService $bloodRequestService,
+    ) {
+    }
+
     // Build the hospital dashboard response with request statistics, donor responses, and map points.
     public function dashboard(Request $request): JsonResponse
     {
@@ -52,8 +62,35 @@ class HospitalController extends Controller
 
         return response()->json([
             'active_requests' => $this->activeRequests($hospital),
+            'direct_requests' => EmergencyRequest::query()
+                ->with(['hospital.user', 'donor.user'])
+                ->where('hospital_id', $hospital?->id)
+                ->whereNotNull('donor_id')
+                ->latest()
+                ->get(),
             'request_responses' => $this->requestResponses($hospital),
         ]);
+    }
+
+    // Send one targeted blood request from the hospital to a selected donor.
+    public function sendBloodRequest(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'donor_id' => ['required', 'integer', Rule::exists('donors', 'id')],
+            'blood_group' => ['required', Rule::in($this->bloodGroups())],
+            'message' => ['required', 'string', 'max:2000'],
+            'units_required' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'urgency' => ['nullable', Rule::in(['standard', 'urgent', 'critical'])],
+        ]);
+
+        $hospital = $request->user()->load('hospital')->hospital;
+        $donor = Donor::query()->with('user')->findOrFail($validated['donor_id']);
+        $bloodRequest = $this->bloodRequestService->createDirectRequest($hospital, $donor, $validated);
+
+        return response()->json([
+            'message' => 'Blood request sent successfully.',
+            'request' => $bloodRequest,
+        ], JsonResponse::HTTP_CREATED);
     }
 
     // Return searchable donor records for approved hospitals, including distance and availability metadata.
@@ -149,10 +186,18 @@ class HospitalController extends Controller
 
         $requestId = DB::table('emergency_requests')->insertGetId($payload);
         $record = DB::table('emergency_requests')->where('id', $requestId)->first();
+        $notifiedDonorsCount = $this->notifyMatchingDonors(
+            $hospital,
+            $validated['blood_type'],
+            $validated['urgency'],
+            $requestId,
+            $validated['donor_id'] ?? null,
+        );
 
         return response()->json([
             'message' => 'Emergency request broadcast successfully.',
             'selected_donor_id' => $validated['donor_id'] ?? null,
+            'notified_donors_count' => $notifiedDonorsCount,
             'request' => $record ? $this->normalizeActiveRequest($record) : null,
         ], JsonResponse::HTTP_CREATED);
     }
@@ -897,6 +942,102 @@ class HospitalController extends Controller
             'status' => ucfirst(strtolower((string) ($record['status'] ?? 'completed'))),
             'donated_at' => $this->formatRelativeTime($record['donated_at'] ?? null),
         ];
+    }
+
+    // Notify compatible donor users after the hospital request has been created successfully.
+    private function notifyMatchingDonors(
+        ?Hospital $hospital,
+        string $bloodType,
+        string $urgency,
+        int $requestId,
+        ?int $selectedDonorId = null,
+    ): int {
+        $donors = $this->matchingDonorUsersForRequest($bloodType, $selectedDonorId);
+
+        if ($donors->isEmpty()) {
+            return 0;
+        }
+
+        $hospitalName = $hospital?->hospital_name ?: 'Hospital';
+        $location = $hospital?->address ?: null;
+
+        $donors->each(function (User $user) use ($requestId, $hospital, $hospitalName, $bloodType, $urgency, $location): void {
+            $notification = BloodRequestNotification::newBloodRequest(
+                requestId: $requestId,
+                hospitalId: (int) ($hospital?->id ?? 0),
+                hospitalName: $hospitalName,
+                bloodGroup: $bloodType,
+                urgency: $urgency,
+                location: $location,
+            );
+
+            $user->notify($notification);
+
+            // Broadcast instantly so the donor notification bell updates without a refresh when websockets are available.
+            event(new BloodRequestCreated(
+                $user->id,
+                'New Blood Request',
+                sprintf(
+                    '%s needs %s blood%s%s',
+                    $hospitalName,
+                    $bloodType,
+                    $urgency ? ' ('.$urgency.')' : '',
+                    $location ? ' at '.$location : '',
+                ),
+                $requestId,
+                (int) ($hospital?->id ?? 0),
+                $hospitalName,
+                $bloodType,
+            ));
+        });
+
+        return $donors->count();
+    }
+
+    // Match active and available donors by blood group, and require saved map coordinates when present.
+    private function matchingDonorUsersForRequest(string $bloodType, ?int $selectedDonorId = null): Collection
+    {
+        if (! $this->hasTable('donors') || ! $this->hasTable('users')) {
+            return collect();
+        }
+
+        $query = User::query()
+            ->where('role', User::ROLE_DONOR)
+            ->with('donor')
+            ->whereHas('donor', function ($builder) use ($bloodType, $selectedDonorId): void {
+                if ($this->hasColumn('donors', 'blood_type')) {
+                    $builder->where('blood_type', $bloodType);
+                }
+
+                if ($selectedDonorId) {
+                    $builder->where('id', $selectedDonorId);
+                }
+
+                if ($this->hasColumn('donors', 'availability_status')) {
+                    $builder->whereIn('availability_status', ['active', 'available']);
+                }
+
+                if ($this->hasColumn('donors', 'is_eligible')) {
+                    $builder->where('is_eligible', true);
+                }
+
+                if ($this->hasColumn('donors', 'latitude')) {
+                    $builder->whereNotNull('latitude');
+                }
+
+                if ($this->hasColumn('donors', 'longitude')) {
+                    $builder->whereNotNull('longitude');
+                }
+            });
+
+        if ($this->hasColumn('users', 'status')) {
+            $query->where('status', 'active');
+        }
+
+        return $query
+            ->get()
+            ->filter(fn (User $user): bool => $user->donor !== null)
+            ->values();
     }
 
     private function hospitalCenter(?Hospital $hospital): array

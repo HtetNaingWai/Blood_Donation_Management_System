@@ -38,6 +38,11 @@ function LoginPage() {
         return
       }
 
+      if (requestedPath && ['donor', 'hospital'].includes(data.user.role) && requestedPath.startsWith('/messages')) {
+        navigate(requestedPath, { replace: true })
+        return
+      }
+
       if (requestedPath && data.user.role === 'hospital' && requestedPath.startsWith('/hospital/dashboard')) {
         navigate(homeRoute, { replace: true })
         return

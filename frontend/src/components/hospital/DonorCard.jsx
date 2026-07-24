@@ -9,7 +9,7 @@ function formatAvailability(status) {
 }
 
 // Individual donor summary card used in the hospital search results grid.
-function DonorCard({ donor, onRequestBlood }) {
+function DonorCard({ donor, onRequestBlood, onMessage }) {
   return (
     <article className="hospital-search-donors__card hospital-panel">
       <div className="hospital-search-donors__card-top">
@@ -39,13 +39,23 @@ function DonorCard({ donor, onRequestBlood }) {
         </div>
       </dl>
 
-      <button
-        type="button"
-        className="hospital-search-donors__request-button"
-        onClick={() => onRequestBlood?.(donor)}
-      >
-        Request Blood
-      </button>
+      <div className="hospital-search-donors__card-actions">
+        <button
+          type="button"
+          className="hospital-search-donors__request-button"
+          onClick={() => onRequestBlood?.(donor)}
+        >
+          Request Blood
+        </button>
+
+        <button
+          type="button"
+          className="hospital-search-donors__secondary-button"
+          onClick={() => onMessage?.(donor)}
+        >
+          Message
+        </button>
+      </div>
     </article>
   )
 }

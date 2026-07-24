@@ -9,12 +9,14 @@ import LocationPicker from '../../components/map/LocationPicker'
 import hospitalService, { emptyHospitalDashboard } from '../../services/hospitalService'
 import { logout } from '../../services/authService'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../../services/authStorage'
+import useNotifications from '../../hooks/useNotifications'
 
 const sidebarItems = [
   { label: 'Dashboard', icon: '📊' },
   { label: 'Search Donors', icon: '💉', route: '/hospital/search-donors' },
-  { label: 'Blood Requests', icon: '🩸' },
-  { label: 'Notifications', icon: '🔔' },
+  { label: 'Blood Requests', icon: '🩸', route: '/hospital/blood-requests' },
+  { label: 'Messages', icon: '💬', route: '/messages' },
+  { label: 'Notifications', icon: '🔔', route: '/notifications' },
   { label: 'Profile', icon: '👤' },
 ]
 
@@ -57,6 +59,17 @@ function HospitalDashboard() {
     latitude: '',
     longitude: '',
   })
+  const currentUser = dashboard.user || storedUser
+  const hospital = dashboard.hospital || currentUser?.hospital
+  const {
+    notifications,
+    unreadNotificationCount,
+    notificationsLoading,
+    notificationActionLoading,
+    notificationError,
+    markNotificationRead: handleMarkNotificationRead,
+    markAllNotificationsRead: handleMarkAllNotificationsRead,
+  } = useNotifications(currentUser?.id || storedUser?.id)
 
   useEffect(() => {
     setActiveSection(searchParams.get('section') || 'Dashboard')
@@ -112,6 +125,12 @@ function HospitalDashboard() {
   }, [])
 
   useEffect(() => {
+    if (notificationError) {
+      setError(notificationError)
+    }
+  }, [notificationError])
+
+  useEffect(() => {
     function syncSessionAccess() {
       const token = getStoredToken()
       const user = getStoredUser()
@@ -135,8 +154,6 @@ function HospitalDashboard() {
     }
   }, [navigate])
 
-  const currentUser = dashboard.user || storedUser
-  const hospital = dashboard.hospital || currentUser?.hospital
   const doctorName = currentUser?.name || hospital?.hospital_name || 'Hospital User'
   const hospitalTitle = hospital?.hospital_name || currentUser?.name || 'Approved Hospital'
   const matchRate = dashboard.stats.match_rate || 0
@@ -351,6 +368,64 @@ function HospitalDashboard() {
             <h2>{title}</h2>
             <p>{message}</p>
           </div>
+        </div>
+      </section>
+    )
+  }
+
+  function renderNotifications() {
+    return (
+      <section className="hospital-panel hospital-panel--notifications">
+        <div className="hospital-panel__header">
+          <div>
+            <h2>Hospital Notifications</h2>
+            <p>{unreadNotificationCount} unread message updates</p>
+          </div>
+          <button
+            type="button"
+            className="hospital-notification-action"
+            onClick={handleMarkAllNotificationsRead}
+            disabled={!notifications.length || unreadNotificationCount === 0 || notificationActionLoading === 'all'}
+          >
+            {notificationActionLoading === 'all' ? 'Updating...' : 'Mark all read'}
+          </button>
+        </div>
+
+        <div className="hospital-notifications">
+          {notificationsLoading && !notifications.length ? (
+            <div className="hospital-empty-state">Loading notifications...</div>
+          ) : notifications.length ? (
+            notifications.map((item) => (
+              <article
+                className={`hospital-notification${item.is_read ? '' : ' hospital-notification--unread'}`}
+                key={item.id || item.title}
+              >
+                <div className={`hospital-notification__icon hospital-notification__icon--${item.tone || 'soft'}`}>
+                  {item.tone === 'danger' ? '!' : item.tone === 'success' ? '✓' : '✉'}
+                </div>
+                <div className="hospital-notification__content">
+                  <strong>{item.title}</strong>
+                  <p>{item.body}</p>
+                  {item.message_preview ? <p className="hospital-notification__preview">"{item.message_preview}"</p> : null}
+                  <small>{item.age}</small>
+                </div>
+                {!item.is_read ? (
+                  <button
+                    type="button"
+                    className="hospital-notification-action"
+                    onClick={() => handleMarkNotificationRead(item.id)}
+                    disabled={notificationActionLoading === item.id}
+                  >
+                    {notificationActionLoading === item.id ? 'Saving...' : 'Mark as read'}
+                  </button>
+                ) : (
+                  <span className="hospital-notification-state">Read</span>
+                )}
+              </article>
+            ))
+          ) : (
+            <div className="hospital-empty-state">No notifications to show.</div>
+          )}
         </div>
       </section>
     )
@@ -964,7 +1039,22 @@ function HospitalDashboard() {
           </label>
 
           <div className="hospital-topbar__actions">
-            <span className="hospital-topbar__icon" aria-hidden="true">🔔</span>
+            <button
+              type="button"
+              className="hospital-topbar__icon hospital-topbar__icon--button"
+              onClick={() => {
+                setActiveSection('Notifications')
+                setSearchParams({ section: 'Notifications' })
+              }}
+              aria-label={unreadNotificationCount ? `${unreadNotificationCount} unread notifications` : 'Notifications'}
+            >
+              <span aria-hidden="true">🔔</span>
+              {unreadNotificationCount ? (
+                <span className="dashboard-notification-badge">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
+              ) : null}
+            </button>
             <span className="hospital-topbar__icon" aria-hidden="true">?</span>
             <div className="hospital-topbar__identity">
               <strong>{doctorName}</strong>
@@ -982,8 +1072,7 @@ function HospitalDashboard() {
           {activeSection === 'Search Donors' &&
             renderPlaceholder('Search Donors', 'Your donor search can be expanded next with advanced filters, travel radius, and eligibility targeting.')}
           {activeSection === 'Profile' && renderProfile()}
-          {activeSection === 'Notifications' &&
-            renderPlaceholder('Hospital Notifications', 'A full hospital notification center can be added next for request alerts and coordination updates.')}
+          {activeSection === 'Notifications' && renderNotifications()}
         </main>
       </div>
     </div>

@@ -6,12 +6,17 @@ function RoleRoute({ allowedRole }) {
   const location = useLocation()
   const token = getStoredToken()
   const user = getStoredUser()
+  const allowedRoles = Array.isArray(allowedRole) ? allowedRole : [allowedRole]
 
   if (!token || !user) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
 
-  if (user.role !== allowedRole) {
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to={getUserHomeRoute(user)} replace />
+  }
+
+  if (user.role === 'hospital' && user.hospital?.approval_status !== 'approved') {
     return <Navigate to={getUserHomeRoute(user)} replace />
   }
 

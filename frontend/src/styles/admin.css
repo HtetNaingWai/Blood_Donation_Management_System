@@ -744,10 +744,35 @@
   border: 1px solid #ecd7d1;
 }
 
+.donor-topbar__icon--button,
+.hospital-topbar__icon--button {
+  position: relative;
+  cursor: pointer;
+  font: inherit;
+}
+
 .donor-topbar__avatar {
   background: linear-gradient(135deg, #d04a3b 0%, #8d261d 100%);
   color: #fff;
   font-weight: 800;
+}
+
+.dashboard-notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  box-shadow: 0 8px 18px rgba(192, 57, 43, 0.24);
 }
 
 .donor-error {
@@ -1304,6 +1329,10 @@
   border-top: 1px solid #f0e3de;
 }
 
+.donor-notification--unread {
+  background: #fff7f5;
+}
+
 .donor-notification__icon {
   width: 54px;
   height: 54px;
@@ -1329,6 +1358,12 @@
   color: #b62f22;
 }
 
+.donor-notification__content {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+}
+
 .donor-notification strong {
   display: block;
   color: #191b1d;
@@ -1343,6 +1378,53 @@
 
 .donor-notification small {
   color: #8b817d;
+}
+
+.dashboard-notification-action,
+.dashboard-notification-state,
+.hospital-notification-action,
+.hospital-notification-state {
+  margin-top: 0.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 0.95rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.dashboard-notification-action,
+.hospital-notification-action {
+  border: 1px solid #e1c1ba;
+  background: #fff;
+  color: #a33224;
+  cursor: pointer;
+}
+
+.dashboard-notification-action:disabled,
+.hospital-notification-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.dashboard-notification-state,
+.hospital-notification-state {
+  background: #eef4ef;
+  color: #157f48;
+}
+
+.dashboard-notification-preview,
+.hospital-notification__preview {
+  margin: 0;
+  color: #7a6761;
+  font-style: italic;
+}
+
+.donor-notifications-page .donor-panel__header p {
+  margin: 0.35rem 0 0;
+  color: #6b5d58;
 }
 
 .donor-referral {
@@ -1536,6 +1618,78 @@
   place-items: center;
   background: #fff;
   border: 1px solid #ecd7d1;
+}
+
+.hospital-panel--notifications {
+  padding: 1.5rem;
+}
+
+.hospital-notifications {
+  display: grid;
+  gap: 1rem;
+}
+
+.hospital-notification {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid #f0e1dc;
+  border-radius: 20px;
+  background: #fff;
+}
+
+.hospital-notification--unread {
+  background: #fff7f5;
+}
+
+.hospital-notification__icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.hospital-notification__icon--danger {
+  background: #ffe1da;
+  color: #d03f2f;
+}
+
+.hospital-notification__icon--success {
+  background: #dff7e7;
+  color: #157f48;
+}
+
+.hospital-notification__icon--soft {
+  background: #ffecea;
+  color: #b62f22;
+}
+
+.hospital-notification__content {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.hospital-notification__content strong {
+  color: #1d1f22;
+  font-size: 1.1rem;
+}
+
+.hospital-notification__content p,
+.hospital-notification__content small {
+  margin: 0;
+}
+
+.hospital-notification__content p {
+  color: #4b4340;
+}
+
+.hospital-notification__content small {
+  color: #8b817d;
 }
 
 .hospital-topbar__identity {

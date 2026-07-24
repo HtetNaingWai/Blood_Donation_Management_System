@@ -252,6 +252,11 @@
   gap: 1rem;
 }
 
+.hospital-search-donors__card-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .hospital-search-donors__request-actions {
   display: flex;
   gap: 0.75rem;

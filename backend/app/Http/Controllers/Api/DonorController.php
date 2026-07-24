@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Donor;
+use App\Models\EmergencyRequest;
 use App\Models\User;
+use App\Services\BloodRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -15,6 +17,11 @@ use Illuminate\Validation\Rule;
 
 class DonorController extends Controller
 {
+    public function __construct(
+        private readonly BloodRequestService $bloodRequestService,
+    ) {
+    }
+
     // Build the donor dashboard response with profile, request, completion, and donation sections.
     public function dashboard(Request $request): JsonResponse
     {
@@ -61,6 +68,7 @@ class DonorController extends Controller
 
         return response()->json([
             'available_requests' => $this->nearbyRequests($donor, 20),
+            'received_requests' => $donor ? $this->bloodRequestService->donorRequests($donor) : [],
             'accepted_requests' => $this->acceptedRequests($user, $donor),
         ]);
     }
@@ -99,6 +107,22 @@ class DonorController extends Controller
             return response()->json([
                 'message' => 'Donor profile not found.',
             ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $directRequest = EmergencyRequest::query()
+            ->with(['hospital.user', 'donor.user'])
+            ->where('id', $requestId)
+            ->where('donor_id', $donor->id)
+            ->first();
+
+        if ($directRequest) {
+            $updatedRequest = $this->bloodRequestService->acceptRequest($directRequest, $donor);
+
+            return response()->json([
+                'message' => 'Blood request accepted successfully.',
+                'request' => $updatedRequest,
+                'received_requests' => $this->bloodRequestService->donorRequests($donor),
+            ]);
         }
 
         if (! $this->hasTable('emergency_requests')) {
@@ -173,6 +197,39 @@ class DonorController extends Controller
         return response()->json([
             'message' => 'Blood request accepted successfully.',
             'accepted_requests' => $this->acceptedRequests($user->fresh()->load('donor'), $donor->fresh()),
+        ]);
+    }
+
+    // Let the donor reject only a direct request that was sent to their donor profile.
+    public function rejectRequest(Request $request, int $requestId): JsonResponse
+    {
+        $user = $request->user()->load('donor');
+        $donor = $user->donor;
+
+        if (! $donor) {
+            return response()->json([
+                'message' => 'Donor profile not found.',
+            ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $directRequest = EmergencyRequest::query()
+            ->with(['hospital.user', 'donor.user'])
+            ->where('id', $requestId)
+            ->where('donor_id', $donor->id)
+            ->first();
+
+        if (! $directRequest) {
+            return response()->json([
+                'message' => 'Blood request not found.',
+            ], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $updatedRequest = $this->bloodRequestService->rejectRequest($directRequest, $donor);
+
+        return response()->json([
+            'message' => 'Blood request rejected successfully.',
+            'request' => $updatedRequest,
+            'received_requests' => $this->bloodRequestService->donorRequests($donor),
         ]);
     }
 

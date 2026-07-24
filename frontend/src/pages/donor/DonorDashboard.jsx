@@ -4,14 +4,17 @@ import LocationPicker from '../../components/map/LocationPicker'
 import donorService, { emptyDonorDashboard } from '../../services/donorService'
 import { logout } from '../../services/authService'
 import { getStoredUser } from '../../services/authStorage'
+import chatService from '../../services/chatService'
+import useNotifications from '../../hooks/useNotifications'
 import SearchHospital from './SearchHospital'
 
 const sidebarItems = [
   { label: 'Dashboard', icon: '📊' },
   { label: 'Donations', icon: '💉' },
-  { label: 'Blood Requests', icon: '🩸' },
+  { label: 'Blood Requests', icon: '🩸', route: '/donor/blood-requests' },
   { label: 'Search Hospital', icon: '🏨' },
-  { label: 'Notifications', icon: '🔔' },
+  { label: 'Messages', icon: '💬', route: '/messages' },
+  { label: 'Notifications', icon: '🔔', route: '/notifications' },
   { label: 'Profile', icon: '👤' },
   
 ]
@@ -35,7 +38,6 @@ function DonorDashboard() {
   const storedUser = getStoredUser()
   const [activeSection, setActiveSection] = useState('Dashboard')
   const [dashboard, setDashboard] = useState(emptyDonorDashboard)
-  const [notifications, setNotifications] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -61,6 +63,17 @@ function DonorDashboard() {
     email_notifications: true,
     location_sharing: true,
   })
+  const currentUser = dashboard.user || storedUser
+  const donor = currentUser?.donor
+  const {
+    notifications,
+    unreadNotificationCount,
+    notificationsLoading,
+    notificationActionLoading,
+    notificationError,
+    markNotificationRead: handleMarkNotificationRead,
+    markAllNotificationsRead: handleMarkAllNotificationsRead,
+  } = useNotifications(currentUser?.id || storedUser?.id)
 
   useEffect(() => {
     let isMounted = true
@@ -93,7 +106,6 @@ function DonorDashboard() {
           donation_history: data?.donations || data?.donation_history || [],
           notifications: data?.notifications || [],
         })
-        setNotifications(data?.notifications || [])
       } catch {
         if (isMounted) {
           setError('Unable to load donor dashboard right now.')
@@ -112,8 +124,12 @@ function DonorDashboard() {
     }
   }, [])
 
-  const currentUser = dashboard.user || storedUser
-  const donor = currentUser?.donor
+  useEffect(() => {
+    if (notificationError) {
+      setError(notificationError)
+    }
+  }, [notificationError])
+
   const donorName = currentUser?.name?.split(' ')[0] || 'Donor'
   const bloodGroup = dashboard.summary.blood_group || donor?.blood_type || 'Unknown'
   const isAvailable = dashboard.summary.availability_status === 'available'
@@ -228,6 +244,15 @@ function DonorDashboard() {
   async function handleLogout() {
     await logout()
     navigate('/', { replace: true })
+  }
+
+  function handleSectionChange(item) {
+    if (item.route) {
+      navigate(item.route)
+      return
+    }
+
+    setActiveSection(item.label)
   }
 
   async function handleAvailabilityToggle() {
@@ -412,6 +437,26 @@ function DonorDashboard() {
       setError(apiMessage || 'Unable to accept this blood request right now.')
     } finally {
       setRequestActionLoadingId(null)
+    }
+  }
+
+  async function handleMessageHospital(notification) {
+    if (!notification?.hospital_id) {
+      return
+    }
+
+    setError('')
+
+    try {
+      const data = await chatService.createConversation({
+        hospital_id: notification.hospital_id,
+      })
+
+      if (data?.conversation?.id) {
+        navigate(`/messages/${data.conversation.id}`)
+      }
+    } catch (messageError) {
+      setError(messageError?.response?.data?.message || 'Unable to open the hospital conversation right now.')
     }
   }
 
@@ -602,20 +647,52 @@ function DonorDashboard() {
             <section className="donor-panel donor-panel--notifications">
               <div className="donor-panel__header">
                 <h2>Notifications</h2>
-                <button type="button" onClick={() => setNotifications([])}>Clear all</button>
+                <button
+                  type="button"
+                  onClick={handleMarkAllNotificationsRead}
+                  disabled={!notifications.length || unreadNotificationCount === 0 || notificationActionLoading === 'all'}
+                >
+                  {notificationActionLoading === 'all' ? 'Updating...' : 'Mark all read'}
+                </button>
               </div>
 
               <div className="donor-notifications">
-                {notifications.length ? (
+                {notificationsLoading && !notifications.length ? (
+                  <div className="donor-empty-state">Loading notifications...</div>
+                ) : notifications.length ? (
                   notifications.map((item) => (
-                    <article className="donor-notification" key={item.id || item.title}>
+                    <article
+                      className={`donor-notification${item.is_read ? '' : ' donor-notification--unread'}`}
+                      key={item.id || item.title}
+                    >
                       <div className={`donor-notification__icon donor-notification__icon--${item.tone || 'soft'}`}>
                         {item.tone === 'danger' ? '!' : item.tone === 'success' ? '✓' : '♡'}
                       </div>
-                      <div>
+                      <div className="donor-notification__content">
                         <strong>{item.title}</strong>
                         <p>{item.body}</p>
                         <small>{item.age}</small>
+                        {!item.is_read ? (
+                          <button
+                            type="button"
+                            className="dashboard-notification-action"
+                            onClick={() => handleMarkNotificationRead(item.id)}
+                            disabled={notificationActionLoading === item.id}
+                          >
+                            {notificationActionLoading === item.id ? 'Saving...' : 'Mark as read'}
+                          </button>
+                        ) : (
+                          <span className="dashboard-notification-state">Read</span>
+                        )}
+                        {item.hospital_id ? (
+                          <button
+                            type="button"
+                            className="dashboard-notification-action"
+                            onClick={() => handleMessageHospital(item)}
+                          >
+                            Message Hospital
+                          </button>
+                        ) : null}
                       </div>
                     </article>
                   ))
@@ -956,7 +1033,7 @@ function DonorDashboard() {
                 key={item.label}
                 type="button"
                 className={`donor-nav__item${activeSection === item.label ? ' donor-nav__item--active' : ''}`}
-                onClick={() => setActiveSection(item.label)}
+                onClick={() => handleSectionChange(item)}
               >
                 <span aria-hidden="true">{item.icon}</span>
                 {item.label}
@@ -984,7 +1061,19 @@ function DonorDashboard() {
           </label>
 
           <div className="donor-topbar__actions">
-            <span className="donor-topbar__icon" aria-hidden="true">🔔</span>
+            <button
+              type="button"
+              className="donor-topbar__icon donor-topbar__icon--button"
+              onClick={() => setActiveSection('Notifications')}
+              aria-label={unreadNotificationCount ? `${unreadNotificationCount} unread notifications` : 'Notifications'}
+            >
+              <span aria-hidden="true">🔔</span>
+              {unreadNotificationCount ? (
+                <span className="dashboard-notification-badge">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
+              ) : null}
+            </button>
             <div className="donor-topbar__avatar">{donorName.slice(0, 1)}</div>
           </div>
         </header>
@@ -1008,8 +1097,69 @@ function DonorDashboard() {
               onRefreshHospitals={refreshHospitals}
             />
           )}
-          {activeSection === 'Notifications' &&
-            renderPlaceholder('Notifications Center', 'Your notifications are already live in the dashboard. A full notification center can be added next.')}
+          {activeSection === 'Notifications' && (
+            <section className="donor-panel donor-panel--notifications donor-notifications-page">
+              <div className="donor-panel__header">
+                <div>
+                  <h2>Notifications Center</h2>
+                  <p>{unreadNotificationCount} unread message updates</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMarkAllNotificationsRead}
+                  disabled={!notifications.length || unreadNotificationCount === 0 || notificationActionLoading === 'all'}
+                >
+                  {notificationActionLoading === 'all' ? 'Updating...' : 'Mark all read'}
+                </button>
+              </div>
+
+              <div className="donor-notifications">
+                {notificationsLoading && !notifications.length ? (
+                  <div className="donor-empty-state">Loading notifications...</div>
+                ) : notifications.length ? (
+                  notifications.map((item) => (
+                    <article
+                      className={`donor-notification${item.is_read ? '' : ' donor-notification--unread'}`}
+                      key={item.id || item.title}
+                    >
+                      <div className={`donor-notification__icon donor-notification__icon--${item.tone || 'soft'}`}>
+                        {item.tone === 'danger' ? '!' : item.tone === 'success' ? '✓' : '♡'}
+                      </div>
+                      <div className="donor-notification__content">
+                        <strong>{item.title}</strong>
+                        <p>{item.body}</p>
+                        {item.message_preview ? <p className="dashboard-notification-preview">"{item.message_preview}"</p> : null}
+                        <small>{item.age}</small>
+                        {!item.is_read ? (
+                          <button
+                            type="button"
+                            className="dashboard-notification-action"
+                            onClick={() => handleMarkNotificationRead(item.id)}
+                            disabled={notificationActionLoading === item.id}
+                          >
+                            {notificationActionLoading === item.id ? 'Saving...' : 'Mark as read'}
+                          </button>
+                        ) : (
+                          <span className="dashboard-notification-state">Read</span>
+                        )}
+                        {item.hospital_id ? (
+                          <button
+                            type="button"
+                            className="dashboard-notification-action"
+                            onClick={() => handleMessageHospital(item)}
+                          >
+                            Message Hospital
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="donor-empty-state">No notifications to show.</div>
+                )}
+              </div>
+            </section>
+          )}
         </main>
       </div>
     </div>

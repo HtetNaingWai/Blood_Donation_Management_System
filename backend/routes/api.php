@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\DonorController;
 use App\Http\Controllers\Api\HospitalController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\StatusController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +21,9 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::put('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+        Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     });
 
     // Approved hospital API routes for dashboard data, request creation, profile updates, and donation completion.
@@ -28,6 +33,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/dashboard', [HospitalController::class, 'dashboard']);
             Route::get('/donors', [HospitalController::class, 'donors']);
             Route::get('/requests', [HospitalController::class, 'requests']);
+            Route::post('/blood-request', [HospitalController::class, 'sendBloodRequest']);
             Route::put('/profile', [HospitalController::class, 'updateProfile']);
             Route::post('/requests', [HospitalController::class, 'storeRequest']);
             Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
@@ -42,6 +48,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/requests', [DonorController::class, 'requests']);
             Route::get('/donations', [DonorController::class, 'donations']);
             Route::post('/requests/{requestId}/accept', [DonorController::class, 'acceptRequest']);
+            Route::post('/requests/{requestId}/reject', [DonorController::class, 'rejectRequest']);
             Route::put('/profile', [DonorController::class, 'updateProfile']);
             Route::put('/availability', [DonorController::class, 'updateAvailability']);
         });
@@ -66,6 +73,17 @@ Route::prefix('admin')
         Route::put('/users/{user}/status', [AdminController::class, 'updateUserStatus']);
     });
 
+// Shared chat API routes for authenticated donors and hospitals.
+Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/conversations', [ChatController::class, 'index']);
+    Route::post('/conversations', [ChatController::class, 'store']);
+    Route::get('/conversations/{id}/messages', [ChatController::class, 'messages']);
+    Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']);
+    Route::put('/conversations/{id}/read', [ChatController::class, 'markAsRead']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+});
+
 // Legacy non-v1 hospital routes remain in place for compatibility with older clients.
 Route::prefix('hospital')
     ->middleware(['auth:sanctum', 'hospital.approved'])
@@ -73,6 +91,7 @@ Route::prefix('hospital')
         Route::get('/dashboard', [HospitalController::class, 'dashboard']);
         Route::get('/donors', [HospitalController::class, 'donors']);
         Route::get('/requests', [HospitalController::class, 'requests']);
+        Route::post('/blood-request', [HospitalController::class, 'sendBloodRequest']);
         Route::put('/profile', [HospitalController::class, 'updateProfile']);
         Route::post('/requests', [HospitalController::class, 'storeRequest']);
         Route::put('/responses/{responseId}/complete', [HospitalController::class, 'completeResponse']);
@@ -87,6 +106,7 @@ Route::prefix('donor')
         Route::get('/requests', [DonorController::class, 'requests']);
         Route::get('/donations', [DonorController::class, 'donations']);
         Route::post('/requests/{requestId}/accept', [DonorController::class, 'acceptRequest']);
+        Route::post('/requests/{requestId}/reject', [DonorController::class, 'rejectRequest']);
         Route::put('/profile', [DonorController::class, 'updateProfile']);
         Route::put('/availability', [DonorController::class, 'updateAvailability']);
     });

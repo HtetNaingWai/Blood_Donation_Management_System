@@ -4,16 +4,21 @@ import DonorCard from '../../components/hospital/DonorCard'
 import DonorFilter from '../../components/hospital/DonorFilter'
 import DonorMap from '../../components/hospital/DonorMap'
 import DonorSearchBar from '../../components/hospital/DonorSearchBar'
+import NotificationDropdown from '../../components/notifications/NotificationDropdown'
+import useNotifications from '../../hooks/useNotifications'
+import bloodRequestService from '../../services/bloodRequestService'
 import hospitalService, { emptyHospitalDonorSearch } from '../../services/hospitalService'
 import { logout } from '../../services/authService'
 import { getStoredToken, getStoredUser, getUserHomeRoute } from '../../services/authStorage'
+import chatService from '../../services/chatService'
 import '../../styles/hospital-search-donors.css'
 
 const sidebarItems = [
   { label: 'Dashboard', icon: '📊', route: '/hospital/dashboard' },
   { label: 'Search Donors', icon: '💉', route: '/hospital/search-donors' },
-  { label: 'Blood Requests', icon: '🩸', route: '/hospital/dashboard?section=Blood%20Requests' },
-  { label: 'Notifications', icon: '🔔', route: '/hospital/dashboard?section=Notifications' },
+  { label: 'Blood Requests', icon: '🩸', route: '/hospital/blood-requests' },
+  { label: 'Messages', icon: '💬', route: '/messages' },
+  { label: 'Notifications', icon: '🔔', route: '/notifications' },
   { label: 'Profile', icon: '👤', route: '/hospital/dashboard?section=Profile' },
 ]
 
@@ -73,7 +78,15 @@ function SearchDonors() {
   const [requestForm, setRequestForm] = useState({
     units_required: '1',
     urgency: 'standard',
+    message: '',
   })
+  const {
+    notifications,
+    unreadNotificationCount,
+    notificationsLoading,
+    notificationActionLoading,
+    markNotificationRead,
+  } = useNotifications(storedUser?.id)
 
   useEffect(() => {
     let isMounted = true
@@ -85,7 +98,7 @@ function SearchDonors() {
       }
 
       try {
-        const data = await hospitalService.getDonors({
+      const data = await hospitalService.getDonors({
           blood_group: filters.bloodGroup !== 'all' ? filters.bloodGroup : undefined,
           township: filters.township !== 'all' ? filters.township : undefined,
           availability: filters.availability !== 'all' ? filters.availability : undefined,
@@ -205,6 +218,27 @@ function SearchDonors() {
     navigate('/', { replace: true })
   }
 
+  async function handleMessageDonor(donor) {
+    setError('')
+
+    try {
+      const data = await chatService.createConversation({
+        donor_id: donor.id,
+      })
+
+      if (data?.conversation?.id) {
+        navigate(`/messages/${data.conversation.id}`)
+      }
+    } catch (messageError) {
+      const apiMessage =
+        messageError?.response?.data?.errors
+          ? Object.values(messageError.response.data.errors).flat()[0]
+          : messageError?.response?.data?.message
+
+      setError(apiMessage || 'Unable to open the donor conversation right now.')
+    }
+  }
+
   async function handleRequestBlood(event) {
     event.preventDefault()
 
@@ -215,12 +249,13 @@ function SearchDonors() {
 
     setRequestSubmitting(true)
     setRequestError('')
-    setRequestMessage('')
+      setRequestMessage('')
 
     try {
-      const data = await hospitalService.createRequest({
+      const data = await bloodRequestService.createBloodRequest({
         donor_id: selectedDonor.id,
-        blood_type: selectedDonor.bloodGroup,
+        blood_group: selectedDonor.bloodGroup,
+        message: requestForm.message.trim() || `Urgent blood needed from ${selectedDonor.name}.`,
         units_required: Number(requestForm.units_required),
         urgency: requestForm.urgency,
       })
@@ -234,6 +269,7 @@ function SearchDonors() {
       setRequestForm({
         units_required: '1',
         urgency: 'standard',
+        message: '',
       })
     } catch (submitError) {
       const apiMessage =
@@ -245,6 +281,15 @@ function SearchDonors() {
     } finally {
       setRequestSubmitting(false)
     }
+  }
+
+  function handleNotificationRoute(notification) {
+    if (notification.conversation_id) {
+      navigate(`/messages/${notification.conversation_id}`)
+      return
+    }
+
+    navigate('/hospital/blood-requests')
   }
 
   return (
@@ -290,7 +335,16 @@ function SearchDonors() {
           </label>
 
           <div className="hospital-topbar__actions">
-            <span className="hospital-topbar__icon" aria-hidden="true">🔔</span>
+            <NotificationDropdown
+              variant="hospital"
+              notifications={notifications}
+              unreadCount={unreadNotificationCount}
+              loading={notificationsLoading}
+              actionLoading={notificationActionLoading}
+              onMarkAsRead={markNotificationRead}
+              onNotificationClick={handleNotificationRoute}
+              onViewAll={() => navigate('/notifications')}
+            />
             <span className="hospital-topbar__icon" aria-hidden="true">?</span>
             <div className="hospital-topbar__identity">
               <strong>{doctorName}</strong>
@@ -361,6 +415,16 @@ function SearchDonors() {
                       </label>
                     </div>
 
+                    <label>
+                      <span>Message</span>
+                      <textarea
+                        value={requestForm.message}
+                        onChange={(event) => updateRequestForm('message', event.target.value)}
+                        placeholder="Explain the urgency and any helpful donor instructions."
+                        rows="4"
+                      />
+                    </label>
+
                     {requestError ? <p className="hospital-error">{requestError}</p> : null}
 
                     <div className="hospital-search-donors__request-actions">
@@ -410,6 +474,7 @@ function SearchDonors() {
                             units_required: current.units_required || '1',
                           }))
                         }}
+                        onMessage={handleMessageDonor}
                       />
                     ))}
                   </div>
